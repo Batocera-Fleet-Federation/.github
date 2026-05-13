@@ -1,4 +1,5 @@
 # Batocera Fleet Federation
+![Batocera Fleet Federation](./main.jpeg)
 
 Batocera Fleet Federation is a lightweight, self-hosted platform for managing, monitoring, and automating one or many Batocera retro gaming systems.
 
