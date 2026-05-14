@@ -1,108 +1,220 @@
-# Batocera Fleet Federation
 ![Batocera Fleet Federation](./main.jpeg)
 
-Batocera Fleet Federation is a lightweight, self-hosted platform for managing, monitoring, and automating one or many Batocera retro gaming systems.
+# Batocera Fleet Federation — Problem Statement & Vision
 
-Inspired by the StarCraft Zerg hierarchy, the ecosystem is built around three primary components:
+Modern retro gaming collections have evolved far beyond a single console sitting under a TV. Many enthusiasts now operate multiple Batocera systems across arcades, living rooms, handhelds, cabinets, and dedicated emulation servers. As collections grow, the operational complexity grows with them.
 
-- **Overmind** — centralized fleet management and orchestration
-- **Drone** — lightweight agent running on Batocera devices
-- **Hive Mind** *(planned)* — future peer-to-peer federation layer
-
-The project brings modern infrastructure management concepts to retro gaming environments by providing centralized visibility, remote diagnostics, metadata validation, artwork integrity checks, and secure remote management capabilities.
+The Batocera Fleet Federation project was created to solve the visibility, management, and operational challenges that appear when running one — or many — Batocera systems at scale.
 
 ---
 
-# Core Components
+# The Problem
 
-## Overmind
+## 1. Limited Visibility Into Batocera Systems
 
-The Overmind is the centralized management platform for the Federation ecosystem.
+Batocera is intentionally lightweight and appliance-like, which is excellent for gaming, but difficult for administration and troubleshooting.
 
-It provides:
-- Fleet-wide dashboards
-- ROM and metadata visibility
-- Artwork validation
-- Health monitoring
-- Remote diagnostics
-- Administrative APIs
-- PostgreSQL-backed persistence
-- Multi-device orchestration
+When problems occur, users often have little or no visibility into:
 
-The Overmind acts as the control plane for managing connected Batocera systems.
+- Emulator crashes
+- Missing BIOS files
+- Controller mapping issues
+- Broken ROM metadata
+- Audio/device conflicts
+- Missing artwork
+- Network connectivity issues
+- Corrupt gamelists
+- Failed scrapes
+- Storage problems
+- Performance bottlenecks
+- Launch failures
+- Invalid ROM references
 
----
+Most troubleshooting today requires:
 
-## Drone
+- SSH access
+- Manual log inspection
+- Navigating scattered configuration files
+- Understanding emulator internals
+- Reproducing issues directly on the device
 
-The Drone is a lightweight agent installed directly on Batocera systems.
-
-It is responsible for:
-- Reporting system health and telemetry
-- Scanning ROM inventories
-- Validating metadata and artwork
-- Hosting local APIs
-- Supporting remote diagnostics
-- Secure communication with the Overmind
-
-Each Batocera machine becomes a manageable node within the Federation ecosystem.
+This becomes increasingly difficult when managing multiple systems.
 
 ---
 
-## Hive Mind (Planned)
+## 2. No Centralized Fleet Management
 
-The Hive Mind is the planned peer-to-peer federation layer.
+Once a user owns several Batocera machines, new operational challenges emerge:
 
-Future goals include:
-- Drone-to-drone communication
-- Distributed synchronization
-- Shared metadata propagation
-- Federated discovery
-- Reduced dependency on centralized infrastructure
+- Which systems are online?
+- Which systems are outdated?
+- Which systems are missing ROMs?
+- Which systems have different emulator settings?
+- Which systems are actively being played?
+- Which systems are failing?
+- Which systems have artwork issues?
+- Which systems have corrupted gamelists?
+- Which systems have inconsistent controller mappings?
+- Which systems have storage nearing capacity?
+- Which systems are missing BIOS files?
 
----
+Today, there is no unified operational layer for managing a fleet of Batocera devices.
 
-# Goals
+Most users manually maintain:
 
-Batocera Fleet Federation aims to solve common operational challenges for Batocera power users and arcade builders, including:
+- USB drives
+- rsync scripts
+- spreadsheets
+- notes
+- duplicated configs
+- ad hoc backups
+- inconsistent metadata
 
-- Managing multiple Batocera systems
-- Detecting broken gamelist entries
-- Identifying missing artwork or metadata
-- Simplifying remote administration
-- Centralizing visibility into ROM collections
-- Automating maintenance workflows
-- Supporting large-scale retro gaming deployments
-
-The platform is designed to remain lightweight and compatible with low-resource gaming hardware.
-
----
-
-# Features
-
-Current and planned features include:
-
-- Fleet management dashboard
-- Secure token-based authentication
-- PostgreSQL persistence
-- Lightweight local Drone databases
-- ROM inventory scanning
-- Metadata validation
-- Missing artwork detection
-- REST APIs
-- Health endpoints
-- Remote diagnostics
-- IPv4/IPv6 support
-- Batocera-native integrations
-- Future P2P federation support
+This does not scale.
 
 ---
 
-# Installation
+## 3. ROM Metadata & Artwork Quality Problems
 
-## Drone
+Large retro collections frequently suffer from inconsistent presentation quality:
 
-Install on a Batocera system:
+- Missing marquee artwork
+- Incorrect logos
+- Low-quality box art
+- Duplicate metadata
+- Broken video previews
+- Games incorrectly identified
+- Invalid gamelist entries
+- ROMs existing on disk but not in gamelists
+- Gamelist references pointing to missing files
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/Batocera-Fleet-Federation/batocera.drone/main/scripts/run_now.sh | bash
+Maintaining polished frontends across thousands of games is extremely time consuming.
+
+Users need tools that can:
+
+- Detect missing assets
+- Refine existing artwork
+- Generate replacement marquees
+- Compare metadata quality
+- Validate gamelist integrity
+- Synchronize metadata across systems
+
+---
+
+# The Solution
+
+## Batocera Fleet Federation
+
+Batocera Fleet Federation introduces a distributed management architecture for Batocera environments.
+
+The platform consists of multiple coordinated components:
+
+| Component | Purpose |
+|---|---|
+| Drone | Lightweight agent running on each Batocera machine |
+| Overmind | Centralized fleet management and operational visibility platform |
+| Hive Mind (planned) | Peer-to-peer federation and synchronization layer |
+
+---
+
+# What the Platform Enables
+
+## Centralized Fleet Visibility
+
+The platform provides operational awareness across all Batocera systems:
+
+- Online/offline status
+- System health
+- Emulator failures
+- Game launch failures
+- Storage usage
+- Network status
+- Active sessions
+- Recently played games
+- Installed systems
+- ROM inventories
+- Emulator configurations
+- Artwork completeness
+- Log aggregation
+
+Instead of SSH’ing into multiple devices individually, users gain centralized visibility into the entire fleet.
+
+---
+
+## Fleet-Wide Configuration Management
+
+The project enables synchronization and comparison across machines:
+
+- Emulator settings
+- Controller mappings
+- BIOS inventories
+- ROM collections
+- Metadata
+- Artwork
+- Themes
+- Audio settings
+- System configurations
+
+Users can identify:
+
+- Drift between systems
+- Missing ROMs
+- Inconsistent emulator versions
+- Different configuration values
+- Failed syncs
+- Broken assets
+
+This transforms Batocera management from manual maintenance into manageable infrastructure.
+
+---
+
+## Operational Troubleshooting
+
+The platform improves debugging dramatically by exposing:
+
+- Emulator logs
+- System logs
+- Runtime errors
+- Metadata scan results
+- Missing file detection
+- Failed artwork scans
+- Invalid gamelist references
+- Network connectivity diagnostics
+
+Instead of reactive debugging, users gain proactive operational awareness.
+
+---
+
+## Artwork & Metadata Refinement
+
+The platform is designed to improve frontend quality across collections by helping users:
+
+- Detect missing artwork
+- Identify low-quality assets
+- Generate replacement marquees
+- Validate gamelist consistency
+- Detect orphaned ROMs
+- Compare metadata quality between systems
+- Refine presentation quality at scale
+
+The goal is not only operational management, but also preservation and curation quality.
+
+---
+
+# Long-Term Vision
+
+The long-term vision is to treat fleets of Batocera systems similarly to managed infrastructure platforms.
+
+Instead of isolated retro gaming boxes, users gain:
+
+- Distributed retro gaming infrastructure
+- Fleet-wide observability
+- Consistent configuration management
+- Metadata governance
+- Automated synchronization
+- Centralized diagnostics
+- Cross-device awareness
+- Operational tooling
+- Peer-to-peer federation
+
+Batocera Fleet Federation aims to become the operational layer for large-scale retro gaming environments.
