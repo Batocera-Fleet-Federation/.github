@@ -1,0 +1,90 @@
+# =============================================================================
+# Batocera VM / QEMU / Docker Runtime Artifacts
+# =============================================================================
+
+# Downloaded Batocera images
+batocera-docker/images/
+*.img
+*.img.gz
+*.qcow2
+*.vdi
+*.vmdk
+*.iso
+*.aria2
+*.credentials
+
+# VM snapshots / save states
+*.sav
+*.state
+*.snapshot
+
+# QEMU runtime files
+*.pid
+*.monitor
+*.serial
+*.log
+
+# =============================================================================
+# Docker Runtime / Build
+# =============================================================================
+
+# Docker temp/build artifacts
+batocera-docker/runner/
+.docker/
+docker-cache/
+docker-data/
+
+# Compose overrides
+docker-compose.override.yml
+
+# =============================================================================
+# Python
+# =============================================================================
+
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Pip
+pip-wheel-metadata/
+*.egg-info/
+
+# =============================================================================
+# macOS
+# =============================================================================
+
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# macOS temp files
+Icon?
+._*
+
+# =============================================================================
+# IDEs / Editors
+# =============================================================================
+
+.vscode/
+.idea/
+
+# =============================================================================
+# Logs
+# =============================================================================
+
+logs/
+*.log
+
+# =============================================================================
+# Optional: Keep folder structure while ignoring contents
+# =============================================================================
+
+# Uncomment if desired:
+# !batocera-docker/images/.gitkeep
