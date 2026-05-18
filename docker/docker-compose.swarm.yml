@@ -1,10 +1,44 @@
+x-drone-env: &drone-env
+  DRONE_APP_USERNAME: admin
+  DRONE_APP_PASSWORD: changeme
+  OVERMIND_URL: http://overmind:8000
+  OVERMIND_EMAIL: "${OVERMIND_EMAIL:-}"
+  OVERMIND_AUTH_TOKEN: "${OVERMIND_AUTH_TOKEN:-}"
+  OVERMIND_DRONE_TOKEN: "${OVERMIND_DRONE_TOKEN:-}"
+  USE_FAKE_DATA: "${USE_FAKE_DATA:-false}"
+  OVERMIND_POLL_SECONDS: "${DRONE_HEARTBEAT_SECONDS:-60}"
+  OVERMIND_SPEED_SAMPLE_SECONDS: "${OVERMIND_SPEED_SAMPLE_SECONDS:-300}"
+  PEER_CHECK_INTERVAL_SECONDS: "${PEER_CHECK_INTERVAL_SECONDS:-120}"
+  DRONE_SYSTEM_INFO_REFRESH_SECONDS: "${DRONE_SYSTEM_INFO_REFRESH_SECONDS:-1800}"
+  DRONE_MTLS_ENABLED: "${DRONE_MTLS_ENABLED:-true}"
+  HTTPS_PORT: 8443
+  DRONE_ROM_MIN: 4
+  DRONE_ROM_MAX: 10
+
+x-drone-common: &drone-common
+  image: ghcr.io/batocera-fleet-federation/batocera-drone:local
+  build:
+    context: ../../batocera.drone
+  depends_on:
+    overmind:
+      condition: service_healthy
+  environment:
+    <<: *drone-env
+  volumes:
+    - ../data/roms:/rom-source:ro
+  deploy:
+    resources:
+      limits:
+        cpus: "0.50"
+        memory: 384M
+
 services:
   overmind:
     image: ghcr.io/batocera-fleet-federation/batocera-overmind:local
     build:
       context: ../../batocera.overmind
     environment:
-      USE_FAKE_DATA: "true"
+      USE_FAKE_DATA: "${USE_FAKE_DATA:-false}"
       SWARM_OFFLINE_THRESHOLD_SECONDS: "180"
     ports:
       - "${OVERMIND_PORT:-8000}:8000"
@@ -15,26 +49,13 @@ services:
       retries: 12
 
   drone-a:
-    image: ghcr.io/batocera-fleet-federation/batocera-drone:local
-    build:
-      context: ../../batocera.drone
-    depends_on:
-      overmind:
-        condition: service_healthy
+    <<: *drone-common
+    container_name: bff-drone-a
+    hostname: drone-a
+    mac_address: "02:42:ac:11:00:11"
     environment:
-      DRONE_DEVICE_ID: arcade-cabinet-001
-      DRONE_APP_USERNAME: admin
-      DRONE_APP_PASSWORD: changeme
-      OVERMIND_URL: http://overmind:8000
-      OVERMIND_DRONE_TOKEN: demo-local-drone-token
-      OVERMIND_EMAIL: demo@example.com
-      OVERMIND_PASSWORD: DemoPass123
-      OVERMIND_POLL_SECONDS: "${DRONE_HEARTBEAT_SECONDS:-60}"
-      OVERMIND_SPEED_SAMPLE_SECONDS: "${OVERMIND_SPEED_SAMPLE_SECONDS:-300}"
-      DRONE_MTLS_ENABLED: "${DRONE_MTLS_ENABLED:-true}"
-      HTTPS_PORT: 8443
-      DRONE_ROM_MIN: 8
-      DRONE_ROM_MAX: 18
+      <<: *drone-env
+      DRONE_DEVICE_ID: local-drone-a
     volumes:
       - ../data/roms:/rom-source:ro
       - drone-a-data:/userdata
@@ -42,32 +63,49 @@ services:
       - "${DRONE_A_PORT:-8443}:8443"
 
   drone-b:
-    image: ghcr.io/batocera-fleet-federation/batocera-drone:local
-    build:
-      context: ../../batocera.drone
-    depends_on:
-      overmind:
-        condition: service_healthy
+    <<: *drone-common
+    container_name: bff-drone-b
+    hostname: drone-b
+    mac_address: "02:42:ac:11:00:12"
     environment:
-      DRONE_DEVICE_ID: raspberry-pi-001
-      DRONE_APP_USERNAME: admin
-      DRONE_APP_PASSWORD: changeme
-      OVERMIND_URL: http://overmind:8000
-      OVERMIND_DRONE_TOKEN: demo-local-drone-token
-      OVERMIND_EMAIL: demo@example.com
-      OVERMIND_PASSWORD: DemoPass123
-      OVERMIND_POLL_SECONDS: "${DRONE_HEARTBEAT_SECONDS:-60}"
-      OVERMIND_SPEED_SAMPLE_SECONDS: "${OVERMIND_SPEED_SAMPLE_SECONDS:-300}"
-      DRONE_MTLS_ENABLED: "${DRONE_MTLS_ENABLED:-true}"
-      HTTPS_PORT: 8443
-      DRONE_ROM_MIN: 8
-      DRONE_ROM_MAX: 18
+      <<: *drone-env
+      DRONE_DEVICE_ID: local-drone-b
     volumes:
       - ../data/roms:/rom-source:ro
       - drone-b-data:/userdata
     ports:
       - "${DRONE_B_PORT:-8444}:8443"
 
+  drone-c:
+    <<: *drone-common
+    container_name: bff-drone-c
+    hostname: drone-c
+    mac_address: "02:42:ac:11:00:13"
+    environment:
+      <<: *drone-env
+      DRONE_DEVICE_ID: local-drone-c
+    volumes:
+      - ../data/roms:/rom-source:ro
+      - drone-c-data:/userdata
+    ports:
+      - "${DRONE_C_PORT:-8445}:8443"
+
+  drone-d:
+    <<: *drone-common
+    container_name: bff-drone-d
+    hostname: drone-d
+    mac_address: "02:42:ac:11:00:14"
+    environment:
+      <<: *drone-env
+      DRONE_DEVICE_ID: local-drone-d
+    volumes:
+      - ../data/roms:/rom-source:ro
+      - drone-d-data:/userdata
+    ports:
+      - "${DRONE_D_PORT:-8446}:8443"
+
 volumes:
   drone-a-data:
   drone-b-data:
+  drone-c-data:
+  drone-d-data:

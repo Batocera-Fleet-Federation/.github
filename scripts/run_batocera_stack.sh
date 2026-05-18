@@ -22,7 +22,7 @@ Starts both local Batocera apps:
   Overmind: http://localhost:${OVERMIND_PORT}
   Drone:    http://localhost:${DRONE_PORT}
 
-Fake data is forced on for both apps.
+Fake data is off by default. Set USE_FAKE_DATA=true to enable demo data.
 
 Options:
   --kill-existing   Kill current listeners on ${OVERMIND_PORT}/${DRONE_PORT} before starting.
@@ -167,7 +167,7 @@ echo "Starting Batocera Drone on http://localhost:${DRONE_PORT}"
   ROM_API_PASSWORD="${ROM_API_PASSWORD:-changeme}" \
   HTTPS_PORT="$DRONE_PORT" \
   HTTP_ONLY="${HTTP_ONLY:-true}" \
-  USE_FAKE_DATA="true" \
+  USE_FAKE_DATA="${USE_FAKE_DATA:-false}" \
   USERDATA_ROOT="$DRONE_FAKE_USERDATA_ROOT" \
   ROMS_ROOT="$DRONE_FAKE_USERDATA_ROOT/roms" \
   BIOS_ROOT="$DRONE_FAKE_USERDATA_ROOT/bios" \
@@ -178,7 +178,7 @@ echo "Starting Batocera Drone on http://localhost:${DRONE_PORT}"
   LOG_DIR="${LOG_DIR:-$DRONE_DIR/local-data/logs}" \
   OVERMIND_URL="${OVERMIND_URL:-http://localhost:${OVERMIND_PORT}}" \
   OVERMIND_EMAIL="${OVERMIND_EMAIL:-demo@example.com}" \
-  OVERMIND_PASSWORD="${OVERMIND_PASSWORD:-DemoPass123}" \
+  OVERMIND_AUTH_TOKEN="${OVERMIND_AUTH_TOKEN:-}" \
   OVERMIND_DEVICE_ID="${OVERMIND_DEVICE_ID:-local-dev-drone}" \
   OVERMIND_POLL_SECONDS="${OVERMIND_POLL_SECONDS:-60}" \
   "$PYTHON_BIN" "$DRONE_DIR/app/main.py"
@@ -189,7 +189,7 @@ echo "Starting Batocera Overmind on http://localhost:${OVERMIND_PORT}"
 (
   cd "$OVERMIND_DIR"
   PYTHONPATH="$OVERMIND_DIR/src" \
-  USE_FAKE_DATA="true" \
+  USE_FAKE_DATA="${USE_FAKE_DATA:-false}" \
   "$PYTHON_BIN" -m uvicorn overmind.main:app --reload --host 0.0.0.0 --port "$OVERMIND_PORT"
 ) &
 OVERMIND_PID="$!"
@@ -199,7 +199,7 @@ cat <<INFO
 Batocera stack is starting.
   Overmind: http://localhost:${OVERMIND_PORT}
   Drone:    http://localhost:${DRONE_PORT}
-  Fake data: forced on
+  Fake data: ${USE_FAKE_DATA:-false}
   Drone fake data root: ${DRONE_FAKE_USERDATA_ROOT}
 
 Drone auth:
@@ -210,10 +210,10 @@ Overmind demo login:
   Email:    demo@example.com
   Password: DemoPass123
 
-Drone fake integration login:
-  Email:    ${OVERMIND_EMAIL:-arcade@example.com}
-  Password: ${OVERMIND_PASSWORD:-ArcadePass123}
-  Device:   ${OVERMIND_DEVICE_ID:-arcade-cabinet-002}
+Drone onboarding:
+  Email:    ${OVERMIND_EMAIL:-"(not set)"}
+  Token:    ${OVERMIND_AUTH_TOKEN:+"(set)"}
+  Device:   ${OVERMIND_DEVICE_ID:-local-dev-drone}
 
 Press Ctrl+C to stop both apps.
 INFO

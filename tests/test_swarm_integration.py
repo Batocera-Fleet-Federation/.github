@@ -12,6 +12,8 @@ from urllib.request import Request, urlopen
 OVERMIND_URL = os.environ.get("OVERMIND_URL", "http://127.0.0.1:8000").rstrip("/")
 DRONE_A_URL = os.environ.get("DRONE_A_URL", "https://127.0.0.1:8443").rstrip("/")
 DRONE_B_URL = os.environ.get("DRONE_B_URL", "https://127.0.0.1:8444").rstrip("/")
+DRONE_C_URL = os.environ.get("DRONE_C_URL", "https://127.0.0.1:8445").rstrip("/")
+DRONE_D_URL = os.environ.get("DRONE_D_URL", "https://127.0.0.1:8446").rstrip("/")
 DRONE_USER = os.environ.get("DRONE_APP_USERNAME", "admin")
 DRONE_PASSWORD = os.environ.get("DRONE_APP_PASSWORD", "changeme")
 OVERMIND_EMAIL = os.environ.get("OVERMIND_EMAIL", "demo@example.com")
@@ -77,8 +79,8 @@ class SwarmIntegrationTests(unittest.TestCase):
         while time.time() < deadline:
             try:
                 request_json(f"{OVERMIND_URL}/health")
-                request_json(f"{DRONE_A_URL}/v1/api/systems", basic_auth=(DRONE_USER, DRONE_PASSWORD))
-                request_json(f"{DRONE_B_URL}/v1/api/systems", basic_auth=(DRONE_USER, DRONE_PASSWORD))
+                for drone_url in (DRONE_A_URL, DRONE_B_URL, DRONE_C_URL, DRONE_D_URL):
+                    request_json(f"{drone_url}/v1/api/systems", basic_auth=(DRONE_USER, DRONE_PASSWORD))
                 break
             except (AssertionError, URLError, TimeoutError) as error:
                 last_error = error
@@ -103,11 +105,11 @@ class SwarmIntegrationTests(unittest.TestCase):
 
     def test_overmind_and_drones_are_healthy(self):
         self.assertEqual(request_json(f"{OVERMIND_URL}/health")["status"], "ok")
-        self.assertTrue(request_json(f"{DRONE_A_URL}/v1/api/systems", basic_auth=(DRONE_USER, DRONE_PASSWORD)))
-        self.assertTrue(request_json(f"{DRONE_B_URL}/v1/api/systems", basic_auth=(DRONE_USER, DRONE_PASSWORD)))
+        for drone_url in (DRONE_A_URL, DRONE_B_URL, DRONE_C_URL, DRONE_D_URL):
+            self.assertTrue(request_json(f"{drone_url}/v1/api/systems", basic_auth=(DRONE_USER, DRONE_PASSWORD)))
 
     def test_multiple_drones_report_system_info(self):
-        self.assertGreaterEqual(len(self.devices), 2)
+        self.assertGreaterEqual(len(self.devices), 4)
         for device in self.devices:
             info = device.get("system_info") or {}
             self.assertTrue(info.get("hostname") or info.get("device_name"))

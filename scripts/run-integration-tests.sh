@@ -7,6 +7,7 @@ COMPOSE_FILE="$ROOT_DIR/.github/docker/docker-compose.swarm.yml"
 if [[ "${USE_EXISTING_SWARM:-false}" != "true" ]]; then
   DRONE_HEARTBEAT_SECONDS="${DRONE_HEARTBEAT_SECONDS:-5}" \
   OVERMIND_SPEED_SAMPLE_SECONDS="${OVERMIND_SPEED_SAMPLE_SECONDS:-5}" \
+  USE_FAKE_DATA="${USE_FAKE_DATA:-true}" \
     docker compose -f "$COMPOSE_FILE" up -d --build
 fi
 
