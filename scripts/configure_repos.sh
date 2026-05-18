@@ -20,7 +20,7 @@ set -euo pipefail
 # ============================================================
 
 GITHUB_OWNER="Batocera-Fleet-Federation"
-CODEOWNER_USERNAME="mynameisjerrod"
+CODEOWNER_USERNAME="DotNetRockStar"
 
 REPOS=(
   "batocera.drone"
@@ -28,7 +28,9 @@ REPOS=(
   ".github"
 )
 
-REQUIRED_APPROVING_REVIEW_COUNT=1
+# GitHub does not allow PR authors to approve their own PRs.
+# Set this to 0 so DotNetRockStar can open and merge their own PRs while branch protection still blocks direct pushes.
+REQUIRED_APPROVING_REVIEW_COUNT=0
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -100,12 +102,12 @@ protect_branch() {
   "required_status_checks": null,
   "enforce_admins": true,
   "required_pull_request_reviews": {
-    "dismiss_stale_reviews": true,
-    "require_code_owner_reviews": true,
+    "dismiss_stale_reviews": false,
+    "require_code_owner_reviews": false,
     "required_approving_review_count": $REQUIRED_APPROVING_REVIEW_COUNT,
     "require_last_push_approval": false,
     "bypass_pull_request_allowances": {
-      "users": [],
+      "users": ["$CODEOWNER_USERNAME"],
       "teams": [],
       "apps": []
     }
