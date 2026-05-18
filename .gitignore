@@ -12,6 +12,9 @@ batocera-docker/images/
 *.iso
 *.aria2
 *.credentials
+*.zip
+*.7z
+*.rar
 
 # VM snapshots / save states
 *.sav
