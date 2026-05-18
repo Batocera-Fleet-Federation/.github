@@ -1,0 +1,73 @@
+services:
+  overmind:
+    image: ghcr.io/batocera-fleet-federation/batocera-overmind:local
+    build:
+      context: ../../batocera.overmind
+    environment:
+      USE_FAKE_DATA: "true"
+      SWARM_OFFLINE_THRESHOLD_SECONDS: "180"
+    ports:
+      - "${OVERMIND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  drone-a:
+    image: ghcr.io/batocera-fleet-federation/batocera-drone:local
+    build:
+      context: ../../batocera.drone
+    depends_on:
+      overmind:
+        condition: service_healthy
+    environment:
+      DRONE_DEVICE_ID: arcade-cabinet-001
+      DRONE_APP_USERNAME: admin
+      DRONE_APP_PASSWORD: changeme
+      OVERMIND_URL: http://overmind:8000
+      OVERMIND_DRONE_TOKEN: demo-local-drone-token
+      OVERMIND_EMAIL: demo@example.com
+      OVERMIND_PASSWORD: DemoPass123
+      OVERMIND_POLL_SECONDS: "${DRONE_HEARTBEAT_SECONDS:-60}"
+      OVERMIND_SPEED_SAMPLE_SECONDS: "${OVERMIND_SPEED_SAMPLE_SECONDS:-300}"
+      DRONE_MTLS_ENABLED: "${DRONE_MTLS_ENABLED:-true}"
+      HTTPS_PORT: 8443
+      DRONE_ROM_MIN: 8
+      DRONE_ROM_MAX: 18
+    volumes:
+      - ../data/roms:/rom-source:ro
+      - drone-a-data:/userdata
+    ports:
+      - "${DRONE_A_PORT:-8443}:8443"
+
+  drone-b:
+    image: ghcr.io/batocera-fleet-federation/batocera-drone:local
+    build:
+      context: ../../batocera.drone
+    depends_on:
+      overmind:
+        condition: service_healthy
+    environment:
+      DRONE_DEVICE_ID: raspberry-pi-001
+      DRONE_APP_USERNAME: admin
+      DRONE_APP_PASSWORD: changeme
+      OVERMIND_URL: http://overmind:8000
+      OVERMIND_DRONE_TOKEN: demo-local-drone-token
+      OVERMIND_EMAIL: demo@example.com
+      OVERMIND_PASSWORD: DemoPass123
+      OVERMIND_POLL_SECONDS: "${DRONE_HEARTBEAT_SECONDS:-60}"
+      OVERMIND_SPEED_SAMPLE_SECONDS: "${OVERMIND_SPEED_SAMPLE_SECONDS:-300}"
+      DRONE_MTLS_ENABLED: "${DRONE_MTLS_ENABLED:-true}"
+      HTTPS_PORT: 8443
+      DRONE_ROM_MIN: 8
+      DRONE_ROM_MAX: 18
+    volumes:
+      - ../data/roms:/rom-source:ro
+      - drone-b-data:/userdata
+    ports:
+      - "${DRONE_B_PORT:-8444}:8443"
+
+volumes:
+  drone-a-data:
+  drone-b-data:

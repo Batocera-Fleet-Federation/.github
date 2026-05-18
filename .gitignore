@@ -91,3 +91,9 @@ logs/
 
 # Uncomment if desired:
 # !batocera-docker/images/.gitkeep
+
+# Local integration ROM pool. Keep docs/placeholders, never commit ROMs.
+data/roms/**
+!data/roms/
+!data/roms/README.md
+!data/roms/.gitkeep

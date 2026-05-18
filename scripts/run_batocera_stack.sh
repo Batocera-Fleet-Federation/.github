@@ -180,7 +180,7 @@ echo "Starting Batocera Drone on http://localhost:${DRONE_PORT}"
   OVERMIND_EMAIL="${OVERMIND_EMAIL:-demo@example.com}" \
   OVERMIND_PASSWORD="${OVERMIND_PASSWORD:-DemoPass123}" \
   OVERMIND_DEVICE_ID="${OVERMIND_DEVICE_ID:-local-dev-drone}" \
-  OVERMIND_POLL_SECONDS="${OVERMIND_POLL_SECONDS:-5}" \
+  OVERMIND_POLL_SECONDS="${OVERMIND_POLL_SECONDS:-60}" \
   "$PYTHON_BIN" "$DRONE_DIR/app/main.py"
 ) &
 DRONE_PID="$!"
