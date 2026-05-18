@@ -1,7 +1,7 @@
 x-drone-env: &drone-env
   DRONE_APP_USERNAME: admin
   DRONE_APP_PASSWORD: changeme
-  OVERMIND_URL: http://overmind:8000
+  OVERMIND_URL: https://bff-overmind:8000
   OVERMIND_EMAIL: "${OVERMIND_EMAIL:-}"
   OVERMIND_AUTH_TOKEN: "${OVERMIND_AUTH_TOKEN:-}"
   OVERMIND_DRONE_TOKEN: "${OVERMIND_DRONE_TOKEN:-}"
