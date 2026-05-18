@@ -2,6 +2,24 @@
 
 # Batocera Fleet Federation — Problem Statement & Vision
 
+## TL;DR
+
+- Overmind is the central hub. Drone runs on each Batocera device.
+- Drones check in every 60 seconds, receive the swarm list, and test direct peer-to-peer connectivity.
+- The local Docker Compose swarm runs one Overmind and multiple realistic Drone containers.
+- Test ROMs go in `.github/data/roms/<system>/<files>` and are imported with `scripts/import-roms-remotely.sh`.
+- Drone containers copy different ROM subsets into their own Batocera-like `/userdata/roms` folders.
+- Integration tests can run against Compose or externally provided Overmind/Drone URLs.
+
+Local swarm quick start:
+
+```bash
+.github/scripts/import-roms-remotely.sh
+.github/scripts/swarm-up.sh
+.github/scripts/run-integration-tests.sh
+.github/scripts/swarm-down.sh --volumes
+```
+
 Modern retro gaming collections have evolved far beyond a single console sitting under a TV. Many enthusiasts now operate multiple Batocera systems across arcades, living rooms, handhelds, cabinets, and dedicated emulation servers. As collections grow, the operational complexity grows with them.
 
 The Batocera Fleet Federation project was created to solve the visibility, management, and operational challenges that appear when running one — or many — Batocera systems at scale.

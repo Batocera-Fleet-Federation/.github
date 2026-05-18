@@ -12,6 +12,9 @@ batocera-docker/images/
 *.iso
 *.aria2
 *.credentials
+*.zip
+*.7z
+*.rar
 
 # VM snapshots / save states
 *.sav
@@ -88,3 +91,9 @@ logs/
 
 # Uncomment if desired:
 # !batocera-docker/images/.gitkeep
+
+# Local integration ROM pool. Keep docs/placeholders, never commit ROMs.
+data/roms/**
+!data/roms/
+!data/roms/README.md
+!data/roms/.gitkeep

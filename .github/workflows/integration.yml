@@ -1,0 +1,23 @@
+name: Integration
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  swarm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: .github
+      - uses: actions/checkout@v4
+        with:
+          repository: Batocera-Fleet-Federation/batocera.drone
+          path: batocera.drone
+      - uses: actions/checkout@v4
+        with:
+          repository: Batocera-Fleet-Federation/batocera.overmind
+          path: batocera.overmind
+      - name: Run Docker Compose integration tests
+        run: .github/scripts/run-integration-tests.sh
