@@ -184,7 +184,11 @@ main() {
   update_hosts_from_urls
 
   echo "Starting local Batocera Fleet Federation swarm..."
-  docker compose -f "$COMPOSE_FILE" up -d --build "${compose_args[@]}"
+  if [[ "${#compose_args[@]}" -gt 0 ]]; then
+    docker compose -f "$COMPOSE_FILE" up -d --build "${compose_args[@]}"
+  else
+    docker compose -f "$COMPOSE_FILE" up -d --build
+  fi
 
   echo "Current swarm containers:"
   docker compose -f "$COMPOSE_FILE" ps
