@@ -16,6 +16,9 @@ BASE_PYTHON_BIN="${BASE_PYTHON_BIN:-python3}"
 OVERMIND_TLS_DIR="${OVERMIND_TLS_DIR:-$OVERMIND_DIR/local-data/certs}"
 OVERMIND_TLS_KEY_FILE="${OVERMIND_TLS_KEY_FILE:-$OVERMIND_TLS_DIR/server.key}"
 OVERMIND_TLS_CERT_FILE="${OVERMIND_TLS_CERT_FILE:-$OVERMIND_TLS_DIR/server.crt}"
+DRONE_TLS_DIR="${DRONE_TLS_DIR:-$DRONE_DIR/local-data/certs}"
+DRONE_TLS_KEY_FILE="${DRONE_TLS_KEY_FILE:-$DRONE_TLS_DIR/server.key}"
+DRONE_TLS_CERT_FILE="${DRONE_TLS_CERT_FILE:-$DRONE_TLS_DIR/server.crt}"
 DRONE_FALLBACK_REQUIREMENTS="${DRONE_FALLBACK_REQUIREMENTS:-fastapi uvicorn[standard] pydantic pydantic-settings python-multipart requests aiofiles}"
 
 OVERMIND_PID=""
@@ -27,7 +30,7 @@ Usage: $(basename "$0") [--kill-existing]
 
 Starts both local Batocera apps:
   Overmind: https://localhost:${OVERMIND_PORT}
-  Drone:    http://localhost:${DRONE_PORT}
+  Drone:    https://localhost:${DRONE_PORT}
 
 Fake data is off by default. Set USE_FAKE_DATA=true to enable demo data.
 
@@ -241,6 +244,7 @@ ensure_runtime_envs() {
   verify_python_module "Drone" "$DRONE_PYTHON_BIN" "uvicorn"
 
   ensure_openssl_cert "$OVERMIND_TLS_DIR" "$OVERMIND_TLS_KEY_FILE" "$OVERMIND_TLS_CERT_FILE"
+  ensure_openssl_cert "$DRONE_TLS_DIR" "$DRONE_TLS_KEY_FILE" "$DRONE_TLS_CERT_FILE"
 }
 
 KILL_EXISTING=false
@@ -284,13 +288,15 @@ fi
 
 trap cleanup INT TERM EXIT
 
-echo "Starting Batocera Drone on http://localhost:${DRONE_PORT}"
+echo "Starting Batocera Drone on https://localhost:${DRONE_PORT}"
 (
   cd "$DRONE_DIR"
   ROM_API_USERNAME="${ROM_API_USERNAME:-admin}" \
   ROM_API_PASSWORD="${ROM_API_PASSWORD:-changeme}" \
   HTTPS_PORT="$DRONE_PORT" \
-  HTTP_ONLY="${HTTP_ONLY:-true}" \
+  HTTP_ONLY="false" \
+  TLS_KEY_FILE="$DRONE_TLS_KEY_FILE" \
+  TLS_CERT_FILE="$DRONE_TLS_CERT_FILE" \
   USE_FAKE_DATA="${USE_FAKE_DATA:-false}" \
   USERDATA_ROOT="$DRONE_FAKE_USERDATA_ROOT" \
   ROMS_ROOT="$DRONE_FAKE_USERDATA_ROOT/roms" \
@@ -298,12 +304,11 @@ echo "Starting Batocera Drone on http://localhost:${DRONE_PORT}"
   THEMES_ROOT="$DRONE_FAKE_USERDATA_ROOT/themes" \
   BATOCERA_CONF_FILE="$DRONE_FAKE_USERDATA_ROOT/system/batocera.conf" \
   ES_SETTINGS_FILE="$DRONE_FAKE_USERDATA_ROOT/system/configs/emulationstation/es_settings.cfg" \
-  TLS_SELF_SIGNED_DIR="${TLS_SELF_SIGNED_DIR:-$DRONE_DIR/local-data/certs}" \
+  TLS_SELF_SIGNED_DIR="$DRONE_TLS_DIR" \
   LOG_DIR="${LOG_DIR:-$DRONE_DIR/local-data/logs}" \
   OVERMIND_URL="${OVERMIND_URL:-https://localhost:${OVERMIND_PORT}}" \
   OVERMIND_EMAIL="${OVERMIND_EMAIL:-demo@example.com}" \
   OVERMIND_AUTH_TOKEN="${OVERMIND_AUTH_TOKEN:-}" \
-  OVERMIND_DEVICE_ID="${OVERMIND_DEVICE_ID:-local-dev-drone}" \
   OVERMIND_POLL_SECONDS="${OVERMIND_POLL_SECONDS:-60}" \
   "$DRONE_PYTHON_BIN" "$DRONE_DIR/app/main.py"
 ) &
@@ -330,10 +335,11 @@ cat <<INFO
 
 Batocera stack is starting.
   Overmind: https://localhost:${OVERMIND_PORT}
-  Drone:    http://localhost:${DRONE_PORT}
+  Drone:    https://localhost:${DRONE_PORT}
   Fake data: ${USE_FAKE_DATA:-false}
   Drone fake data root: ${DRONE_FAKE_USERDATA_ROOT}
   Overmind TLS cert: ${OVERMIND_TLS_CERT_FILE}
+  Drone TLS cert:    ${DRONE_TLS_CERT_FILE}
 
 Drone auth:
   Username: ${ROM_API_USERNAME:-admin}
@@ -346,7 +352,6 @@ Overmind demo login:
 Drone onboarding:
   Email:    ${OVERMIND_EMAIL:-"(not set)"}
   Token:    ${OVERMIND_AUTH_TOKEN:+"(set)"}
-  Device:   ${OVERMIND_DEVICE_ID:-local-dev-drone}
 
 Press Ctrl+C to stop both apps.
 INFO
