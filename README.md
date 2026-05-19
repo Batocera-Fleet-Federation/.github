@@ -4,8 +4,8 @@ This repo holds local swarm orchestration, integration tests, scripts, and test 
 
 ## TL;DR
 
-- Put ROM test data in `.github/data/roms/<system>/<files>`.
-- Populate that folder with `scripts/import-roms-remotely.sh`.
+- Put ROM test data in `.github/data/roms/<system>/<files>` and BIOS test data in `.github/data/bios/<files>`.
+- Populate that folder with `scripts/import-batocera-test-data.sh`.
 - Run one Overmind and four lightweight Drone containers with `scripts/swarm-up.sh`.
 - Drones check in with Overmind every 60 seconds by default.
 - Each Drone gets its own hostname, device id, MAC address, port, volume, and copied ROM subset.
@@ -15,7 +15,7 @@ This repo holds local swarm orchestration, integration tests, scripts, and test 
 From the federation workspace:
 
 ```bash
-.github/scripts/import-roms-remotely.sh
+.github/scripts/import-batocera-test-data.sh
 .github/scripts/swarm-up.sh
 .github/scripts/swarm-status.sh
 .github/scripts/run-integration-tests.sh

@@ -7,7 +7,7 @@
 - Overmind is the central hub. Drone runs on each Batocera device.
 - Drones check in every 60 seconds, receive the swarm list, and test direct peer-to-peer connectivity.
 - The local Docker Compose swarm runs one Overmind and four lightweight realistic Drone containers.
-- Test ROMs go in `.github/data/roms/<system>/<files>` and are imported with `scripts/import-roms-remotely.sh`.
+- Test ROMs go in `.github/data/roms/<system>/<files>` and are imported with `scripts/import-batocera-test-data.sh`.
 - Drone containers copy different ROM subsets into their own Batocera-like `/userdata/roms` folders.
 - Fake data is off by default. New Drones appear in Overmind as **Psionic connection detected** until approved.
 - Drone onboarding uses an Overmind-generated authorization token instead of an integration password.
@@ -17,7 +17,7 @@
 Local swarm quick start:
 
 ```bash
-.github/scripts/import-roms-remotely.sh
+.github/scripts/import-batocera-test-data.sh
 .github/scripts/swarm-up.sh
 .github/scripts/run-integration-tests.sh
 .github/scripts/swarm-down.sh --volumes

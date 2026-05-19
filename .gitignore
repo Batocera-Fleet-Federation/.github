@@ -16,6 +16,9 @@ batocera-docker/images/
 *.7z
 *.rar
 
+# Test Data
+data/*
+
 # VM snapshots / save states
 *.sav
 *.state

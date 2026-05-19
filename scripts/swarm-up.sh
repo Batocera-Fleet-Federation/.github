@@ -4,7 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/.github/docker/docker-compose.swarm.yml"
 ROM_ROOT="$ROOT_DIR/.github/data/roms"
+IMPORT_SCRIPT="$ROOT_DIR/.github/scripts/import-batocera-test-data.sh"
 BROWSER="Google Chrome"
+IMPORT_DATA="false"
 
 URLS=(
   "https://bff-overmind:8000"
@@ -13,6 +15,17 @@ URLS=(
   "https://bff-drone-c:8445"
   "https://bff-drone-d:8446"
 )
+
+usage() {
+  cat <<EOF
+Usage:
+  .github/scripts/swarm-up.sh [--import-data] [docker compose options]
+
+Options:
+  --import-data    Run .github/scripts/import-batocera-test-data.sh before startup.
+  --help, -h       Show this help.
+EOF
+}
 
 update_hosts_from_urls() {
   local marker_start="# BEGIN batocera-fleet-federation swarm hosts"
@@ -133,18 +146,45 @@ validate_roms_exist() {
     cat >&2 <<EOF
 No ROM files found in $ROM_ROOT.
 Import or place test ROMs under .github/data/roms/<system>/<files> first.
-You can run: .github/scripts/import-roms-remotely.sh
+You can run: .github/scripts/import-batocera-test-data.sh --generate-only
 EOF
     exit 1
   fi
 }
 
 main() {
+  local compose_args=()
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --import-data)
+        IMPORT_DATA="true"
+        shift
+        ;;
+      --help|-h)
+        usage
+        exit 0
+        ;;
+      *)
+        compose_args+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  if [[ "$IMPORT_DATA" == "true" ]]; then
+    if [[ ! -x "$IMPORT_SCRIPT" ]]; then
+      echo "ERROR: import script is missing or not executable: $IMPORT_SCRIPT" >&2
+      exit 1
+    fi
+    echo "Importing local Batocera test data..."
+    "$IMPORT_SCRIPT" --generate-only
+  fi
+
   validate_roms_exist
   update_hosts_from_urls
 
   echo "Starting local Batocera Fleet Federation swarm..."
-  docker compose -f "$COMPOSE_FILE" up -d --build "$@"
+  docker compose -f "$COMPOSE_FILE" up -d --build "${compose_args[@]}"
 
   echo "Current swarm containers:"
   docker compose -f "$COMPOSE_FILE" ps

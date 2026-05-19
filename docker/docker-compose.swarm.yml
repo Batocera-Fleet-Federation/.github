@@ -11,6 +11,8 @@ x-drone-env: &drone-env
   PEER_CHECK_INTERVAL_SECONDS: "${PEER_CHECK_INTERVAL_SECONDS:-120}"
   DRONE_SYSTEM_INFO_REFRESH_SECONDS: "${DRONE_SYSTEM_INFO_REFRESH_SECONDS:-1800}"
   DRONE_MTLS_ENABLED: "${DRONE_MTLS_ENABLED:-true}"
+  BATOCERA_TEST_DATA_ROOT: /batocera-test-data
+  ROM_SOURCE_ROOT: /batocera-test-data/roms
   HTTPS_PORT: 8443
   DRONE_ROM_MIN: 4
   DRONE_ROM_MAX: 10
@@ -25,7 +27,7 @@ x-drone-common: &drone-common
   environment:
     <<: *drone-env
   volumes:
-    - ../data/roms:/rom-source:ro
+    - ../data:/batocera-test-data:ro
   deploy:
     resources:
       limits:
@@ -42,8 +44,12 @@ services:
       SWARM_OFFLINE_THRESHOLD_SECONDS: "180"
     ports:
       - "${OVERMIND_PORT:-8000}:8000"
+    networks:
+      default:
+        aliases:
+          - bff-overmind
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      test: ["CMD", "curl", "-k", "-f", "https://localhost:8000"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -58,10 +64,14 @@ services:
       DRONE_DEVICE_ID: bff-drone-a
       HOSTNAME_OVERRIDE: bff-drone-a
     volumes:
-      - ../data/roms:/rom-source:ro
+      - ../data:/batocera-test-data:ro
       - drone-a-data:/userdata
     ports:
       - "${DRONE_A_PORT:-8443}:8443"
+    networks:
+      default:
+        aliases:
+          - bff-drone-a
 
   drone-b:
     <<: *drone-common
@@ -73,10 +83,14 @@ services:
       DRONE_DEVICE_ID: bff-drone-b
       HOSTNAME_OVERRIDE: bff-drone-b
     volumes:
-      - ../data/roms:/rom-source:ro
+      - ../data:/batocera-test-data:ro
       - drone-b-data:/userdata
     ports:
       - "${DRONE_B_PORT:-8444}:8443"
+    networks:
+      default:
+        aliases:
+          - bff-drone-b
 
   drone-c:
     <<: *drone-common
@@ -88,10 +102,14 @@ services:
       DRONE_DEVICE_ID: bff-drone-c
       HOSTNAME_OVERRIDE: bff-drone-c
     volumes:
-      - ../data/roms:/rom-source:ro
+      - ../data:/batocera-test-data:ro
       - drone-c-data:/userdata
     ports:
       - "${DRONE_C_PORT:-8445}:8443"
+    networks:
+      default:
+        aliases:
+          - bff-drone-c
 
   drone-d:
     <<: *drone-common
@@ -103,10 +121,14 @@ services:
       DRONE_DEVICE_ID: bff-drone-d
       HOSTNAME_OVERRIDE: bff-drone-d
     volumes:
-      - ../data/roms:/rom-source:ro
+      - ../data:/batocera-test-data:ro
       - drone-d-data:/userdata
     ports:
       - "${DRONE_D_PORT:-8446}:8443"
+    networks:
+      default:
+        aliases:
+          - bff-drone-d
 
 volumes:
   drone-a-data:
