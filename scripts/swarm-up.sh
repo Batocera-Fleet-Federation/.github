@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/.github/docker/docker-compose.swarm.yml"
 ROM_ROOT="$ROOT_DIR/.github/data/roms"
 IMPORT_SCRIPT="$ROOT_DIR/.github/scripts/import-batocera-test-data.sh"
+PROVISION_MTLS_SCRIPT="$ROOT_DIR/.github/scripts/provision-local-mtls-certs.sh"
 BROWSER="Google Chrome"
 IMPORT_DATA="false"
 
@@ -189,6 +190,16 @@ EOF
   fi
 }
 
+provision_swarm_mtls_certs() {
+  if [[ ! -x "$PROVISION_MTLS_SCRIPT" ]]; then
+    echo "ERROR: local mTLS provisioning script is missing or not executable: $PROVISION_MTLS_SCRIPT" >&2
+    exit 1
+  fi
+
+  echo "Provisioning local swarm Drone mTLS certs..."
+  "$PROVISION_MTLS_SCRIPT" --profile swarm
+}
+
 main() {
   local compose_args=()
   while [[ "$#" -gt 0 ]]; do
@@ -218,6 +229,7 @@ main() {
   fi
 
   validate_roms_exist
+  provision_swarm_mtls_certs
   update_hosts_from_urls
 
   echo "Starting local Batocera Fleet Federation swarm..."

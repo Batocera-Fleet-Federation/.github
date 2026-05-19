@@ -16,9 +16,14 @@ BASE_PYTHON_BIN="${BASE_PYTHON_BIN:-python3}"
 OVERMIND_TLS_DIR="${OVERMIND_TLS_DIR:-$OVERMIND_DIR/local-data/certs}"
 OVERMIND_TLS_KEY_FILE="${OVERMIND_TLS_KEY_FILE:-$OVERMIND_TLS_DIR/server.key}"
 OVERMIND_TLS_CERT_FILE="${OVERMIND_TLS_CERT_FILE:-$OVERMIND_TLS_DIR/server.crt}"
-DRONE_TLS_DIR="${DRONE_TLS_DIR:-$DRONE_DIR/local-data/certs}"
-DRONE_TLS_KEY_FILE="${DRONE_TLS_KEY_FILE:-$DRONE_TLS_DIR/server.key}"
-DRONE_TLS_CERT_FILE="${DRONE_TLS_CERT_FILE:-$DRONE_TLS_DIR/server.crt}"
+LOCAL_MTLS_CERTS_DIR="${LOCAL_MTLS_CERTS_DIR:-$ROOT_DIR/.github/local-certs}"
+LOCAL_DRONE_ID="${LOCAL_DRONE_ID:-local-drone}"
+LOCAL_DRONE_CERT_DIR="${LOCAL_DRONE_CERT_DIR:-$LOCAL_MTLS_CERTS_DIR/drones/$LOCAL_DRONE_ID}"
+DRONE_MTLS_CA_FILE="${DRONE_MTLS_CA_FILE:-$LOCAL_DRONE_CERT_DIR/ca.crt}"
+DRONE_TLS_KEY_FILE="${DRONE_TLS_KEY_FILE:-$LOCAL_DRONE_CERT_DIR/drone.key}"
+DRONE_TLS_CERT_FILE="${DRONE_TLS_CERT_FILE:-$LOCAL_DRONE_CERT_DIR/drone.crt}"
+DRONE_CERT_FILE="${DRONE_CERT_FILE:-$DRONE_TLS_CERT_FILE}"
+DRONE_KEY_FILE="${DRONE_KEY_FILE:-$DRONE_TLS_KEY_FILE}"
 DRONE_FALLBACK_REQUIREMENTS="${DRONE_FALLBACK_REQUIREMENTS:-fastapi uvicorn[standard] pydantic pydantic-settings python-multipart requests aiofiles}"
 
 OVERMIND_PID=""
@@ -244,7 +249,52 @@ ensure_runtime_envs() {
   verify_python_module "Drone" "$DRONE_PYTHON_BIN" "uvicorn"
 
   ensure_openssl_cert "$OVERMIND_TLS_DIR" "$OVERMIND_TLS_KEY_FILE" "$OVERMIND_TLS_CERT_FILE"
-  ensure_openssl_cert "$DRONE_TLS_DIR" "$DRONE_TLS_KEY_FILE" "$DRONE_TLS_CERT_FILE"
+}
+
+provision_local_drone_mtls_certs() {
+  local provision_script="$SCRIPT_DIR/provision-local-mtls-certs.sh"
+  local cert_modulus
+  local key_modulus
+
+  require_command openssl
+
+  if [[ ! -x "$provision_script" ]]; then
+    echo "Missing or non-executable local mTLS provisioning script: $provision_script" >&2
+    echo "Expected this script to provision certs outside the Drone runtime." >&2
+    exit 1
+  fi
+
+  echo "Provisioning local Drone mTLS certs for $LOCAL_DRONE_ID..."
+  LOCAL_MTLS_CERTS_DIR="$LOCAL_MTLS_CERTS_DIR" \
+  LOCAL_DRONE_ID="$LOCAL_DRONE_ID" \
+  HOSTNAME_OVERRIDE="${HOSTNAME_OVERRIDE:-localhost,local-drone,batocera.local}" \
+  "$provision_script" --profile local
+
+  require_file "$DRONE_MTLS_CA_FILE"
+  require_file "$DRONE_CERT_FILE"
+  require_file "$DRONE_KEY_FILE"
+
+  echo "Verifying local Drone mTLS cert chain..."
+  openssl verify -CAfile "$DRONE_MTLS_CA_FILE" "$DRONE_CERT_FILE" >/dev/null
+
+  echo "Verifying local Drone cert is not expired..."
+  openssl x509 -in "$DRONE_CERT_FILE" -noout -checkend 0 >/dev/null
+
+  echo "Verifying local Drone cert and key match..."
+  cert_modulus="$(openssl x509 -noout -modulus -in "$DRONE_CERT_FILE" | openssl md5)"
+  key_modulus="$(openssl rsa -noout -modulus -in "$DRONE_KEY_FILE" 2>/dev/null | openssl md5)"
+
+  if [[ "$cert_modulus" != "$key_modulus" ]]; then
+    echo "Local Drone cert and key do not match." >&2
+    echo "Cert: $DRONE_CERT_FILE" >&2
+    echo "Key:  $DRONE_KEY_FILE" >&2
+    exit 1
+  fi
+
+  if [[ -e "$LOCAL_DRONE_CERT_DIR/ca.key" ]]; then
+    echo "Local Drone cert directory must not contain ca.key: $LOCAL_DRONE_CERT_DIR/ca.key" >&2
+    exit 1
+  fi
 }
 
 KILL_EXISTING=false
@@ -267,6 +317,7 @@ done
 
 require_file "$DRONE_DIR/app/main.py"
 require_file "$OVERMIND_DIR/src/overmind/main.py"
+provision_local_drone_mtls_certs
 ensure_runtime_envs
 require_file "$OVERMIND_PYTHON_BIN"
 require_file "$DRONE_PYTHON_BIN"
@@ -295,6 +346,13 @@ echo "Starting Batocera Drone on https://localhost:${DRONE_PORT}"
   ROM_API_PASSWORD="${ROM_API_PASSWORD:-changeme}" \
   HTTPS_PORT="$DRONE_PORT" \
   HTTP_ONLY="false" \
+  DRONE_DEVICE_ID="${DRONE_DEVICE_ID:-$LOCAL_DRONE_ID}" \
+  HOSTNAME_OVERRIDE="${HOSTNAME_OVERRIDE:-localhost,local-drone,batocera.local}" \
+  DRONE_MTLS_MODE="${DRONE_MTLS_MODE:-managed}" \
+  DRONE_MTLS_ENABLED="${DRONE_MTLS_ENABLED:-true}" \
+  DRONE_MTLS_CA_FILE="$DRONE_MTLS_CA_FILE" \
+  DRONE_CERT_FILE="$DRONE_CERT_FILE" \
+  DRONE_KEY_FILE="$DRONE_KEY_FILE" \
   TLS_KEY_FILE="$DRONE_TLS_KEY_FILE" \
   TLS_CERT_FILE="$DRONE_TLS_CERT_FILE" \
   USE_FAKE_DATA="${USE_FAKE_DATA:-false}" \
@@ -304,7 +362,6 @@ echo "Starting Batocera Drone on https://localhost:${DRONE_PORT}"
   THEMES_ROOT="$DRONE_FAKE_USERDATA_ROOT/themes" \
   BATOCERA_CONF_FILE="$DRONE_FAKE_USERDATA_ROOT/system/batocera.conf" \
   ES_SETTINGS_FILE="$DRONE_FAKE_USERDATA_ROOT/system/configs/emulationstation/es_settings.cfg" \
-  TLS_SELF_SIGNED_DIR="$DRONE_TLS_DIR" \
   LOG_DIR="${LOG_DIR:-$DRONE_DIR/local-data/logs}" \
   OVERMIND_URL="${OVERMIND_URL:-https://localhost:${OVERMIND_PORT}}" \
   OVERMIND_EMAIL="${OVERMIND_EMAIL:-demo@example.com}" \
@@ -332,7 +389,8 @@ Batocera stack is starting.
   Fake data: ${USE_FAKE_DATA:-false}
   Drone fake data root: ${DRONE_FAKE_USERDATA_ROOT}
   Overmind TLS cert: ${OVERMIND_TLS_CERT_FILE}
-  Drone TLS cert:    ${DRONE_TLS_CERT_FILE}
+  Drone mTLS CA:     ${DRONE_MTLS_CA_FILE}
+  Drone TLS cert:    ${DRONE_CERT_FILE}
 
 Drone auth:
   Username: ${ROM_API_USERNAME:-admin}

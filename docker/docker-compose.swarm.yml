@@ -11,8 +11,13 @@ x-drone-env: &drone-env
   PEER_CHECK_INTERVAL_SECONDS: "${PEER_CHECK_INTERVAL_SECONDS:-120}"
   DRONE_SYSTEM_INFO_REFRESH_SECONDS: "${DRONE_SYSTEM_INFO_REFRESH_SECONDS:-1800}"
   DRONE_MTLS_ENABLED: "${DRONE_MTLS_ENABLED:-true}"
-  DRONE_MTLS_CA_FILE: /swarm-mtls/ca.crt
-  DRONE_MTLS_CA_KEY_FILE: /swarm-mtls/ca.key
+  DRONE_MTLS_MODE: managed
+  DRONE_MTLS_CA_FILE: /userdata/system/drone-app/certs/ca.crt
+  DRONE_CERT_FILE: /userdata/system/drone-app/certs/drone.crt
+  DRONE_KEY_FILE: /userdata/system/drone-app/certs/drone.key
+  TLS_CERT_FILE: /userdata/system/drone-app/certs/drone.crt
+  TLS_KEY_FILE: /userdata/system/drone-app/certs/drone.key
+  DRONE_MANAGED_CERT_SOURCE_DIR: /managed-certs
   BATOCERA_TEST_DATA_ROOT: /batocera-test-data
   ROM_SOURCE_ROOT: /batocera-test-data/roms
   HTTPS_PORT: 8443
@@ -30,7 +35,6 @@ x-drone-common: &drone-common
     <<: *drone-env
   volumes:
     - ../data:/batocera-test-data:ro
-    - swarm-mtls:/swarm-mtls
   deploy:
     resources:
       limits:
@@ -68,8 +72,8 @@ services:
       HOSTNAME_OVERRIDE: bff-drone-a
     volumes:
       - ../data:/batocera-test-data:ro
-      - swarm-mtls:/swarm-mtls
       - drone-a-data:/userdata
+      - ../local-certs/drones/drone-a:/managed-certs:ro
     ports:
       - "${DRONE_A_PORT:-8443}:8443"
     networks:
@@ -88,8 +92,8 @@ services:
       HOSTNAME_OVERRIDE: bff-drone-b
     volumes:
       - ../data:/batocera-test-data:ro
-      - swarm-mtls:/swarm-mtls
       - drone-b-data:/userdata
+      - ../local-certs/drones/drone-b:/managed-certs:ro
     ports:
       - "${DRONE_B_PORT:-8444}:8443"
     networks:
@@ -108,8 +112,8 @@ services:
       HOSTNAME_OVERRIDE: bff-drone-c
     volumes:
       - ../data:/batocera-test-data:ro
-      - swarm-mtls:/swarm-mtls
       - drone-c-data:/userdata
+      - ../local-certs/drones/drone-c:/managed-certs:ro
     ports:
       - "${DRONE_C_PORT:-8445}:8443"
     networks:
@@ -128,8 +132,8 @@ services:
       HOSTNAME_OVERRIDE: bff-drone-d
     volumes:
       - ../data:/batocera-test-data:ro
-      - swarm-mtls:/swarm-mtls
       - drone-d-data:/userdata
+      - ../local-certs/drones/drone-d:/managed-certs:ro
     ports:
       - "${DRONE_D_PORT:-8446}:8443"
     networks:
@@ -138,7 +142,6 @@ services:
           - bff-drone-d
 
 volumes:
-  swarm-mtls:
   drone-a-data:
   drone-b-data:
   drone-c-data:
