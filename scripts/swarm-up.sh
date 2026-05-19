@@ -78,8 +78,45 @@ update_hosts_from_urls() {
 
   echo "Updating /etc/hosts with local swarm hostnames. sudo may prompt for your password."
   sudo cp "${tmp_file}.new" /etc/hosts
-
   rm -f "$tmp_file" "${tmp_file}.new"
+
+  flush_host_cache
+  verify_swarm_hosts_resolve
+}
+
+flush_host_cache() {
+  if command -v dscacheutil >/dev/null 2>&1; then
+    dscacheutil -flushcache >/dev/null 2>&1 || true
+  fi
+
+  if command -v killall >/dev/null 2>&1; then
+    killall -HUP mDNSResponder >/dev/null 2>&1 || true
+  fi
+}
+
+verify_swarm_hosts_resolve() {
+  local url
+  local host
+  local missing_hosts=()
+  local missing_count=0
+
+  for url in "${URLS[@]}"; do
+    host="$(printf '%s\n' "$url" | sed -E 's#^https?://([^:/]+).*$#\1#')"
+    if ! dscacheutil -q host -a name "$host" 2>/dev/null | grep -q "ip_address: 127.0.0.1"; then
+      missing_hosts+=("$host")
+      missing_count=$((missing_count + 1))
+    fi
+  done
+
+  if [[ "$missing_count" -gt 0 ]]; then
+    cat >&2 <<EOF
+ERROR: Local swarm hostnames did not resolve after updating /etc/hosts:
+  ${missing_hosts[*]}
+
+Check /etc/hosts for the batocera-fleet-federation swarm hosts block, then rerun this script.
+EOF
+    exit 1
+  fi
 }
 
 url_origin() {
@@ -142,7 +179,7 @@ open_swarm_urls() {
 }
 
 validate_roms_exist() {
-  if [[ ! -d "$ROM_ROOT" ]] || ! find "$ROM_ROOT" -type f ! -name ".gitkeep" ! -name "README.md" | grep -q .; then
+  if [[ ! -d "$ROM_ROOT" ]] || [[ -z "$(find "$ROM_ROOT" -mindepth 2 -type f ! -name ".gitkeep" ! -name "README.md" -print -quit)" ]]; then
     cat >&2 <<EOF
 No ROM files found in $ROM_ROOT.
 Import or place test ROMs under .github/data/roms/<system>/<files> first.
