@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 OVERMIND_DIR="$ROOT_DIR/batocera.overmind"
 DRONE_DIR="$ROOT_DIR/batocera.drone"
-PYTHON_BIN="$OVERMIND_DIR/.venv/bin/python"
+OVERMIND_PYTHON_BIN="$OVERMIND_DIR/.venv/bin/python"
+DRONE_PYTHON_BIN="$DRONE_DIR/.venv/bin/python"
 DRONE_FAKE_USERDATA_ROOT="$DRONE_DIR/local-data/mock-userdata"
 
 OVERMIND_PORT="${OVERMIND_PORT:-8000}"
 DRONE_PORT="${DRONE_PORT:-8443}"
 STOP_TIMEOUT_SECONDS="${STOP_TIMEOUT_SECONDS:-5}"
+BASE_PYTHON_BIN="${BASE_PYTHON_BIN:-python3}"
+OVERMIND_TLS_DIR="${OVERMIND_TLS_DIR:-$OVERMIND_DIR/local-data/certs}"
+OVERMIND_TLS_KEY_FILE="${OVERMIND_TLS_KEY_FILE:-$OVERMIND_TLS_DIR/server.key}"
+OVERMIND_TLS_CERT_FILE="${OVERMIND_TLS_CERT_FILE:-$OVERMIND_TLS_DIR/server.crt}"
+DRONE_FALLBACK_REQUIREMENTS="${DRONE_FALLBACK_REQUIREMENTS:-fastapi uvicorn[standard] pydantic pydantic-settings python-multipart requests aiofiles}"
 
 OVERMIND_PID=""
 DRONE_PID=""
@@ -19,13 +26,15 @@ usage() {
 Usage: $(basename "$0") [--kill-existing]
 
 Starts both local Batocera apps:
-  Overmind: http://localhost:${OVERMIND_PORT}
+  Overmind: https://localhost:${OVERMIND_PORT}
   Drone:    http://localhost:${DRONE_PORT}
 
 Fake data is off by default. Set USE_FAKE_DATA=true to enable demo data.
 
 Options:
   --kill-existing   Kill current listeners on ${OVERMIND_PORT}/${DRONE_PORT} before starting.
+
+The script creates or repairs missing .venv directories, installs dependencies, installs Drone fallback dependencies when needed, verifies imports, and generates local TLS certs when needed.
 USAGE
 }
 
@@ -121,6 +130,119 @@ require_file() {
   fi
 }
 
+require_command() {
+  local command_name="$1"
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "Missing required command: $command_name" >&2
+    exit 1
+  fi
+}
+
+ensure_openssl_cert() {
+  local cert_dir="$1"
+  local key_file="$2"
+  local cert_file="$3"
+
+  mkdir -p "$cert_dir"
+
+  if [[ -s "$key_file" && -s "$cert_file" ]]; then
+    echo "Using existing TLS cert: $cert_file"
+    return 0
+  fi
+
+  require_command openssl
+
+  echo "Generating self-signed TLS cert for localhost..."
+  openssl req -x509 -nodes -days 3650 \
+    -newkey rsa:2048 \
+    -keyout "$key_file" \
+    -out "$cert_file" \
+    -subj "/CN=localhost" \
+    -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+}
+
+verify_python_module() {
+  local name="$1"
+  local python_bin="$2"
+  local module_name="$3"
+
+  echo "Verifying $name module import: $module_name"
+  if ! "$python_bin" -c "import ${module_name}" >/dev/null 2>&1; then
+    echo "$name could not import module: $module_name" >&2
+    echo "Python: $python_bin" >&2
+    exit 1
+  fi
+}
+
+ensure_python_project_env() {
+  local name="$1"
+  local project_dir="$2"
+  local python_bin="$project_dir/.venv/bin/python"
+  local pip_bin="$project_dir/.venv/bin/pip"
+
+  if [[ ! -d "$project_dir" ]]; then
+    echo "Missing project directory for $name: $project_dir" >&2
+    exit 1
+  fi
+
+  if [[ ! -x "$python_bin" || ! -x "$pip_bin" ]]; then
+    echo "Creating Python virtual environment for $name..."
+    rm -rf "$project_dir/.venv"
+    (cd "$project_dir" && "$BASE_PYTHON_BIN" -m venv .venv)
+  fi
+
+  if [[ ! -x "$python_bin" ]]; then
+    echo "Missing Python in $name virtual environment: $python_bin" >&2
+    exit 1
+  fi
+
+  if [[ ! -x "$pip_bin" ]]; then
+    echo "Missing pip in $name virtual environment: $pip_bin" >&2
+    exit 1
+  fi
+
+  echo "Using $name Python: $($python_bin --version 2>&1)"
+  echo "Upgrading Python packaging tools for $name..."
+  "$python_bin" -m pip install --upgrade pip setuptools wheel
+
+  if [[ -f "$project_dir/requirements.txt" ]]; then
+    echo "Installing $name dependencies from requirements.txt..."
+    "$python_bin" -m pip install -r "$project_dir/requirements.txt"
+  fi
+
+  if [[ -f "$project_dir/pyproject.toml" ]]; then
+    echo "Installing $name project in editable mode..."
+    "$python_bin" -m pip install -e "$project_dir"
+  fi
+
+  if [[ ! -f "$project_dir/requirements.txt" && ! -f "$project_dir/pyproject.toml" ]]; then
+    if [[ "$name" == "Drone" ]]; then
+      echo "No requirements.txt or pyproject.toml found for Drone; installing fallback runtime dependencies..."
+      "$python_bin" -m pip install $DRONE_FALLBACK_REQUIREMENTS
+    else
+      echo "No requirements.txt or pyproject.toml found for $name at $project_dir; continuing with virtual environment only."
+    fi
+  fi
+}
+
+ensure_runtime_envs() {
+  require_command "$BASE_PYTHON_BIN"
+
+  ensure_python_project_env "Overmind" "$OVERMIND_DIR"
+  ensure_python_project_env "Drone" "$DRONE_DIR"
+
+  echo "Ensuring Overmind runtime dependencies are installed..."
+  "$OVERMIND_PYTHON_BIN" -m pip install "uvicorn[standard]"
+
+  verify_python_module "Overmind" "$OVERMIND_PYTHON_BIN" "uvicorn"
+  PYTHONPATH="$OVERMIND_DIR/src" verify_python_module "Overmind" "$OVERMIND_PYTHON_BIN" "overmind.main"
+
+  verify_python_module "Drone" "$DRONE_PYTHON_BIN" "fastapi"
+  verify_python_module "Drone" "$DRONE_PYTHON_BIN" "uvicorn"
+
+  ensure_openssl_cert "$OVERMIND_TLS_DIR" "$OVERMIND_TLS_KEY_FILE" "$OVERMIND_TLS_CERT_FILE"
+}
+
 KILL_EXISTING=false
 for arg in "$@"; do
   case "$arg" in
@@ -139,9 +261,11 @@ for arg in "$@"; do
   esac
 done
 
-require_file "$PYTHON_BIN"
 require_file "$DRONE_DIR/app/main.py"
 require_file "$OVERMIND_DIR/src/overmind/main.py"
+ensure_runtime_envs
+require_file "$OVERMIND_PYTHON_BIN"
+require_file "$DRONE_PYTHON_BIN"
 
 if [[ "$KILL_EXISTING" == true ]]; then
   kill_port "$OVERMIND_PORT"
@@ -176,31 +300,40 @@ echo "Starting Batocera Drone on http://localhost:${DRONE_PORT}"
   ES_SETTINGS_FILE="$DRONE_FAKE_USERDATA_ROOT/system/configs/emulationstation/es_settings.cfg" \
   TLS_SELF_SIGNED_DIR="${TLS_SELF_SIGNED_DIR:-$DRONE_DIR/local-data/certs}" \
   LOG_DIR="${LOG_DIR:-$DRONE_DIR/local-data/logs}" \
-  OVERMIND_URL="${OVERMIND_URL:-http://localhost:${OVERMIND_PORT}}" \
+  OVERMIND_URL="${OVERMIND_URL:-https://localhost:${OVERMIND_PORT}}" \
   OVERMIND_EMAIL="${OVERMIND_EMAIL:-demo@example.com}" \
   OVERMIND_AUTH_TOKEN="${OVERMIND_AUTH_TOKEN:-}" \
   OVERMIND_DEVICE_ID="${OVERMIND_DEVICE_ID:-local-dev-drone}" \
   OVERMIND_POLL_SECONDS="${OVERMIND_POLL_SECONDS:-60}" \
-  "$PYTHON_BIN" "$DRONE_DIR/app/main.py"
+  "$DRONE_PYTHON_BIN" "$DRONE_DIR/app/main.py"
 ) &
 DRONE_PID="$!"
 
-echo "Starting Batocera Overmind on http://localhost:${OVERMIND_PORT}"
+echo "Starting Batocera Overmind on https://localhost:${OVERMIND_PORT}"
 (
   cd "$OVERMIND_DIR"
   PYTHONPATH="$OVERMIND_DIR/src" \
   USE_FAKE_DATA="${USE_FAKE_DATA:-false}" \
-  "$PYTHON_BIN" -m uvicorn overmind.main:app --reload --host 0.0.0.0 --port "$OVERMIND_PORT"
+  TLS_SELF_SIGNED_DIR="$OVERMIND_TLS_DIR" \
+  TLS_KEY_FILE="$OVERMIND_TLS_KEY_FILE" \
+  TLS_CERT_FILE="$OVERMIND_TLS_CERT_FILE" \
+  "$OVERMIND_PYTHON_BIN" -m uvicorn overmind.main:app \
+    --reload \
+    --host 0.0.0.0 \
+    --port "$OVERMIND_PORT" \
+    --ssl-keyfile "$OVERMIND_TLS_KEY_FILE" \
+    --ssl-certfile "$OVERMIND_TLS_CERT_FILE"
 ) &
 OVERMIND_PID="$!"
 
 cat <<INFO
 
 Batocera stack is starting.
-  Overmind: http://localhost:${OVERMIND_PORT}
+  Overmind: https://localhost:${OVERMIND_PORT}
   Drone:    http://localhost:${DRONE_PORT}
   Fake data: ${USE_FAKE_DATA:-false}
   Drone fake data root: ${DRONE_FAKE_USERDATA_ROOT}
+  Overmind TLS cert: ${OVERMIND_TLS_CERT_FILE}
 
 Drone auth:
   Username: ${ROM_API_USERNAME:-admin}
