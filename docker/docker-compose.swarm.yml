@@ -55,7 +55,8 @@ services:
     mac_address: "02:42:ac:11:00:11"
     environment:
       <<: *drone-env
-      DRONE_DEVICE_ID: local-drone-a
+      DRONE_DEVICE_ID: bff-drone-a
+      HOSTNAME_OVERRIDE: bff-drone-a
     volumes:
       - ../data/roms:/rom-source:ro
       - drone-a-data:/userdata
@@ -69,7 +70,8 @@ services:
     mac_address: "02:42:ac:11:00:12"
     environment:
       <<: *drone-env
-      DRONE_DEVICE_ID: local-drone-b
+      DRONE_DEVICE_ID: bff-drone-b
+      HOSTNAME_OVERRIDE: bff-drone-b
     volumes:
       - ../data/roms:/rom-source:ro
       - drone-b-data:/userdata
@@ -83,7 +85,8 @@ services:
     mac_address: "02:42:ac:11:00:13"
     environment:
       <<: *drone-env
-      DRONE_DEVICE_ID: local-drone-c
+      DRONE_DEVICE_ID: bff-drone-c
+      HOSTNAME_OVERRIDE: bff-drone-c
     volumes:
       - ../data/roms:/rom-source:ro
       - drone-c-data:/userdata
@@ -97,7 +100,8 @@ services:
     mac_address: "02:42:ac:11:00:14"
     environment:
       <<: *drone-env
-      DRONE_DEVICE_ID: local-drone-d
+      DRONE_DEVICE_ID: bff-drone-d
+      HOSTNAME_OVERRIDE: bff-drone-d
     volumes:
       - ../data/roms:/rom-source:ro
       - drone-d-data:/userdata
