@@ -319,15 +319,8 @@ echo "Starting Batocera Overmind on https://localhost:${OVERMIND_PORT}"
   cd "$OVERMIND_DIR"
   PYTHONPATH="$OVERMIND_DIR/src" \
   USE_FAKE_DATA="${USE_FAKE_DATA:-false}" \
-  TLS_SELF_SIGNED_DIR="$OVERMIND_TLS_DIR" \
-  TLS_KEY_FILE="$OVERMIND_TLS_KEY_FILE" \
-  TLS_CERT_FILE="$OVERMIND_TLS_CERT_FILE" \
-  "$OVERMIND_PYTHON_BIN" -m uvicorn overmind.main:app \
-    --reload \
-    --host 0.0.0.0 \
-    --port "$OVERMIND_PORT" \
-    --ssl-keyfile "$OVERMIND_TLS_KEY_FILE" \
-    --ssl-certfile "$OVERMIND_TLS_CERT_FILE"
+  OVERMIND_PORT="$OVERMIND_PORT" \
+  "$OVERMIND_PYTHON_BIN" -m overmind.main --reload
 ) &
 OVERMIND_PID="$!"
 
