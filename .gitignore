@@ -102,3 +102,6 @@ data/roms/**
 !data/roms/
 !data/roms/README.md
 !data/roms/.gitkeep
+
+# Ignore Terraform local plugin/cache directories
+**/.terraform/
