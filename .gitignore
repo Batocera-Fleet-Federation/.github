@@ -18,6 +18,7 @@ batocera-docker/images/
 
 # Test Data
 data/*
+generated/
 local-certs/
 
 # VM snapshots / save states

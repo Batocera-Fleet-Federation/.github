@@ -23,6 +23,7 @@ x-drone-env: &drone-env
   HTTPS_PORT: 8443
   DRONE_ROM_MIN: 4
   DRONE_ROM_MAX: 10
+  DRONE_SKIP_ROM_SEED: "true"
 
 x-drone-common: &drone-common
   image: ghcr.io/batocera-fleet-federation/batocera-drone:local
@@ -73,6 +74,7 @@ services:
     volumes:
       - ../data:/batocera-test-data:ro
       - drone-a-data:/userdata
+      - ../generated/drone-a/userdata/roms:/userdata/roms
       - ../local-certs/drones/drone-a:/managed-certs:ro
     ports:
       - "${DRONE_A_PORT:-8443}:8443"
@@ -93,6 +95,7 @@ services:
     volumes:
       - ../data:/batocera-test-data:ro
       - drone-b-data:/userdata
+      - ../generated/drone-b/userdata/roms:/userdata/roms
       - ../local-certs/drones/drone-b:/managed-certs:ro
     ports:
       - "${DRONE_B_PORT:-8444}:8443"
@@ -113,6 +116,7 @@ services:
     volumes:
       - ../data:/batocera-test-data:ro
       - drone-c-data:/userdata
+      - ../generated/drone-c/userdata/roms:/userdata/roms
       - ../local-certs/drones/drone-c:/managed-certs:ro
     ports:
       - "${DRONE_C_PORT:-8445}:8443"
@@ -133,6 +137,7 @@ services:
     volumes:
       - ../data:/batocera-test-data:ro
       - drone-d-data:/userdata
+      - ../generated/drone-d/userdata/roms:/userdata/roms
       - ../local-certs/drones/drone-d:/managed-certs:ro
     ports:
       - "${DRONE_D_PORT:-8446}:8443"

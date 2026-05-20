@@ -5,9 +5,15 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/.github/docker/docker-compose.swarm.yml"
 ROM_ROOT="$ROOT_DIR/.github/data/roms"
 IMPORT_SCRIPT="$ROOT_DIR/.github/scripts/import-batocera-test-data.sh"
+GENERATE_SWARM_DATA_SCRIPT="$ROOT_DIR/.github/scripts/generate-swarm-rom-data.py"
 PROVISION_MTLS_SCRIPT="$ROOT_DIR/.github/scripts/provision-local-mtls-certs.sh"
 BROWSER="Google Chrome"
 IMPORT_DATA="false"
+RESET_DATA="false"
+SWARM_DATA_SEED=""
+MIN_ROMS_PER_SYSTEM="1"
+MAX_ROMS_PER_SYSTEM="4"
+DRONE_COUNT="4"
 
 URLS=(
   "https://bff-overmind:8000"
@@ -20,10 +26,15 @@ URLS=(
 usage() {
   cat <<EOF
 Usage:
-  .github/scripts/swarm-up.sh [--import-data] [docker compose options]
+  .github/scripts/swarm-up.sh [--import-data] [--reset-data] [--seed value] [docker compose options]
 
 Options:
   --import-data    Run .github/scripts/import-batocera-test-data.sh before startup.
+  --reset-data     Regenerate .github/generated per-Drone ROM data from scratch.
+  --seed VALUE     Use deterministic randomized per-Drone ROM layout.
+  --min-roms-per-system VALUE
+  --max-roms-per-system VALUE
+  --drone-count VALUE
   --help, -h       Show this help.
 EOF
 }
@@ -200,6 +211,28 @@ provision_swarm_mtls_certs() {
   "$PROVISION_MTLS_SCRIPT" --profile swarm
 }
 
+generate_swarm_rom_data() {
+  if [[ ! -x "$GENERATE_SWARM_DATA_SCRIPT" ]]; then
+    echo "ERROR: generated data script is missing or not executable: $GENERATE_SWARM_DATA_SCRIPT" >&2
+    exit 1
+  fi
+  local args=(
+    "--source" "$ROM_ROOT"
+    "--output" "$ROOT_DIR/.github/generated"
+    "--drone-count" "$DRONE_COUNT"
+    "--min-roms-per-system" "$MIN_ROMS_PER_SYSTEM"
+    "--max-roms-per-system" "$MAX_ROMS_PER_SYSTEM"
+  )
+  if [[ "$RESET_DATA" == "true" ]]; then
+    args+=("--reset")
+  fi
+  if [[ -n "$SWARM_DATA_SEED" ]]; then
+    args+=("--seed" "$SWARM_DATA_SEED")
+  fi
+  echo "Generating per-Drone randomized ROM data..."
+  python3 "$GENERATE_SWARM_DATA_SCRIPT" "${args[@]}"
+}
+
 main() {
   local compose_args=()
   while [[ "$#" -gt 0 ]]; do
@@ -207,6 +240,26 @@ main() {
       --import-data)
         IMPORT_DATA="true"
         shift
+        ;;
+      --reset-data)
+        RESET_DATA="true"
+        shift
+        ;;
+      --seed)
+        SWARM_DATA_SEED="${2:-}"
+        shift 2
+        ;;
+      --min-roms-per-system)
+        MIN_ROMS_PER_SYSTEM="${2:-1}"
+        shift 2
+        ;;
+      --max-roms-per-system)
+        MAX_ROMS_PER_SYSTEM="${2:-4}"
+        shift 2
+        ;;
+      --drone-count)
+        DRONE_COUNT="${2:-4}"
+        shift 2
         ;;
       --help|-h)
         usage
@@ -229,6 +282,7 @@ main() {
   fi
 
   validate_roms_exist
+  generate_swarm_rom_data
   provision_swarm_mtls_certs
   update_hosts_from_urls
 

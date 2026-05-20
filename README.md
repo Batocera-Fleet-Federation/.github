@@ -36,6 +36,12 @@ DRONE_D_URL=https://drone-d.example:8443 \
 
 Docker must be running. If no ROM files are present, the swarm scripts fail and tell you to import ROMs first.
 
+`swarm-up.sh` generates per-Drone ROM userdata under `.github/generated/drone-*/userdata/roms` before starting Compose. Each Drone gets a deterministic randomized subset when `--seed` is supplied, and each generated `gamelist.xml` contains only files copied into that Drone:
+
+```bash
+.github/scripts/swarm-up.sh --import-data --reset-data --seed local-demo
+```
+
 ## Onboarding
 
 The default swarm starts Drones as real unapproved devices. They know the Overmind URL, submit a pending request, and show up in Overmind as **Psionic connection detected**. The Overlord approves them from the Drones page.
@@ -54,4 +60,6 @@ If a peer call fails with an unknown CA or certificate error, Drone refreshes th
 
 ## ROM Sync
 
-Overmind builds a master ROM list from ROM metadata reported by approved Drones. On a selected Drone page, Overmind shows which swarm ROMs are missing on that Drone. Choose a ROM or system to sync; the target Drone automatically chooses the best source peer using recent peer health and speed samples. Overmind coordinates the action and records sync activity, but it does not transfer ROM files.
+Overmind builds a master ROM list from disk-authoritative ROM metadata reported by approved Drones. Drone inventory walks `/userdata/roms/<system>` and treats `gamelist.xml` as optional metadata enrichment only. ROM identity is md5-based: matching md5 means the ROM is already present even if the filename differs, while same-name/different-md5 downloads use normal collision suffixes such as `(2)` and `(3)`.
+
+On a selected Drone page, Overmind shows which swarm ROMs are missing on that Drone. Choose a ROM or system to sync; the target Drone automatically chooses the best source peer using recent peer health and speed samples. Overmind coordinates the action and records sync activity, but it does not transfer ROM files. Completed peer downloads report duration, md5, bytes, and inventory refresh status back to Overmind. The Drones page also includes swarm-wide Sync Activity search and a md5-deduplicated Master List.
