@@ -105,3 +105,6 @@ data/roms/**
 
 # Ignore Terraform local plugin/cache directories
 **/.terraform/
+*.lock.hcl
+*.tfvars.example
+*.tfpl
