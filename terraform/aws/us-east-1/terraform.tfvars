@@ -22,7 +22,7 @@ create_acm_validation_records = true
 ecr_repository_name = "batocera-overmind"
 instance_type       = "t3.micro"
 db_instance_class   = "db.t3.micro"
-availability_zones  = ["us-east-1a", "us-east-1b"]
+availability_zones  = ["us-east-1a"]
 ami_id              = "resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 
 # Optional break-glass SSH. Prefer SSM Session Manager.
@@ -34,4 +34,4 @@ github_repo   = "batocera.overmind"
 github_branch = "main"
 
 # Optional: creates private CA material in Secrets Manager and Terraform state.
-enable_internal_ca_secret = false
+enable_internal_ca_secret = true
