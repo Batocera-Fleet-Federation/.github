@@ -1,10 +1,11 @@
 locals {
-  image_latest = "${aws_ecr_repository.overmind.repository_url}:latest"
+  image_version = "latest"
+  image = "${aws_ecr_repository.overmind.repository_url}:${local.image_version}"
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     aws_region              = var.aws_region
     ecr_repository_url      = aws_ecr_repository.overmind.repository_url
     ecr_registry_url        = split("/", aws_ecr_repository.overmind.repository_url)[0]
-    image                   = local.image_latest
+    image                   = local.image
     domain_name             = local.overmind_fqdn
     runtime_secret_id       = aws_secretsmanager_secret.overmind_runtime.arn
     internal_ca_secret_id   = var.enable_internal_ca_secret ? aws_secretsmanager_secret.internal_ca[0].arn : ""
