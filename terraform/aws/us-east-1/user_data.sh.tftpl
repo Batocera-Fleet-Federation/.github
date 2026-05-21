@@ -19,6 +19,8 @@ INTERNAL_CA_SECRET_ID="${internal_ca_secret_id}"
 CONTAINER_PORT="${overmind_container_port}"
 DOMAIN_NAME="${domain_name}"
 ENVIRONMENT="${environment}"
+AWS_SES_FROM_ADDRESS="${aws_ses_from_address}"
+EMAIL_PROVIDER="${email_provider}"
 
 aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "${ecr_registry_url}"
 docker pull "$IMAGE"
@@ -48,6 +50,9 @@ docker run -d \
   --env-file /opt/overmind/overmind.env \
   -e OVERMIND_ENVIRONMENT="$ENVIRONMENT" \
   -e BASE_URL="https://$DOMAIN_NAME" \
+  -e AWS_REGION="$AWS_REGION" \
+  -e AWS_SES_FROM_ADDRESS="$AWS_SES_FROM_ADDRESS" \
+  -e EMAIL_PROVIDER="$EMAIL_PROVIDER" \
   -p 127.0.0.1:$CONTAINER_PORT:8000 \
   "$IMAGE"
 

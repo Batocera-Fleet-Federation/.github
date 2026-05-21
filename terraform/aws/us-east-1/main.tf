@@ -27,20 +27,6 @@ data "aws_route53_zone" "selected" {
   private_zone = false
 }
 
-locals {
-  root_domain              = trimsuffix(var.domain_name, ".")
-  computed_overmind_domain = var.overmind_subdomain == "" ? local.root_domain : "${var.overmind_subdomain}.${local.root_domain}"
-  overmind_fqdn            = var.overmind_domain_name == "" ? local.computed_overmind_domain : trimsuffix(var.overmind_domain_name, ".")
-  www_domain               = "www.${local.root_domain}"
-  availability_zones       = length(var.availability_zones) == 0 ? data.aws_availability_zones.available[0].names : var.availability_zones
-  instance_ami_id          = var.ami_id == "" ? data.aws_ami.amazon_linux_2023[0].id : var.ami_id
-  route53_zone_id          = var.create_hosted_zone ? aws_route53_zone.domain[0].zone_id : (var.hosted_zone_id != "" ? var.hosted_zone_id : data.aws_route53_zone.selected[0].zone_id)
-  certificate_sans = distinct(compact(concat(
-    [local.www_domain, local.overmind_fqdn == local.root_domain ? "" : local.overmind_fqdn],
-    var.certificate_sans
-  )))
-}
-
 resource "aws_route53_zone" "domain" {
   count = var.create_hosted_zone ? 1 : 0
   name  = local.root_domain
@@ -76,6 +62,57 @@ resource "aws_acm_certificate_validation" "domain" {
   count                   = var.create_acm_validation_records ? 1 : 0
   certificate_arn         = aws_acm_certificate.domain.arn
   validation_record_fqdns = [for record in aws_route53_record.acm_validation : record.fqdn]
+}
+
+resource "aws_ses_domain_identity" "domain" {
+  domain = local.root_domain
+}
+
+resource "aws_route53_record" "ses_domain_verification" {
+  zone_id         = local.route53_zone_id
+  allow_overwrite = true
+  name            = "_amazonses.${local.root_domain}"
+  type            = "TXT"
+  ttl             = 300
+  records         = [aws_ses_domain_identity.domain.verification_token]
+}
+
+resource "aws_ses_domain_identity_verification" "domain" {
+  domain = aws_ses_domain_identity.domain.id
+
+  depends_on = [aws_route53_record.ses_domain_verification]
+}
+
+resource "aws_ses_domain_dkim" "domain" {
+  domain = aws_ses_domain_identity.domain.domain
+}
+
+resource "aws_route53_record" "ses_dkim" {
+  count           = 3
+  zone_id         = local.route53_zone_id
+  allow_overwrite = true
+  name            = "${aws_ses_domain_dkim.domain.dkim_tokens[count.index]}._domainkey.${local.root_domain}"
+  type            = "CNAME"
+  ttl             = 300
+  records         = ["${aws_ses_domain_dkim.domain.dkim_tokens[count.index]}.dkim.amazonses.com"]
+}
+
+resource "aws_route53_record" "ses_spf" {
+  zone_id         = local.route53_zone_id
+  allow_overwrite = true
+  name            = local.root_domain
+  type            = "TXT"
+  ttl             = 300
+  records         = ["v=spf1 include:amazonses.com ~all"]
+}
+
+resource "aws_route53_record" "ses_dmarc" {
+  zone_id         = local.route53_zone_id
+  allow_overwrite = true
+  name            = "_dmarc.${local.root_domain}"
+  type            = "TXT"
+  ttl             = 300
+  records         = ["v=DMARC1; p=none; rua=mailto:dmarc@${local.root_domain}"]
 }
 
 resource "aws_ecr_repository" "overmind" {
@@ -249,6 +286,9 @@ resource "aws_secretsmanager_secret_version" "overmind_runtime" {
     OVERMIND_POSTGRES_USER     = var.db_username
     OVERMIND_POSTGRES_PASSWORD = random_password.db_password.result
     SECRET_KEY                 = random_password.secret_key.result
+    AWS_REGION                 = var.aws_region
+    AWS_SES_FROM_ADDRESS       = "no-reply@${local.root_domain}"
+    EMAIL_PROVIDER             = "ses"
   })
 }
 
@@ -324,6 +364,14 @@ resource "aws_iam_role_policy" "instance" {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = compact([aws_secretsmanager_secret.overmind_runtime.arn, var.enable_internal_ca_secret ? aws_secretsmanager_secret.internal_ca[0].arn : ""])
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ses:SendEmail",
+          "ses:SendRawEmail"
+        ]
+        Resource = aws_ses_domain_identity.domain.arn
       }
     ]
   })
@@ -332,21 +380,6 @@ resource "aws_iam_role_policy" "instance" {
 resource "aws_iam_instance_profile" "overmind" {
   name = "${var.project_name}-${var.environment}"
   role = aws_iam_role.instance.name
-}
-
-locals {
-  image_latest = "${aws_ecr_repository.overmind.repository_url}:latest"
-  user_data = templatefile("${path.module}/user_data.sh.tftpl", {
-    aws_region              = var.aws_region
-    ecr_repository_url      = aws_ecr_repository.overmind.repository_url
-    ecr_registry_url        = split("/", aws_ecr_repository.overmind.repository_url)[0]
-    image                   = local.image_latest
-    domain_name             = local.overmind_fqdn
-    runtime_secret_id       = aws_secretsmanager_secret.overmind_runtime.arn
-    internal_ca_secret_id   = var.enable_internal_ca_secret ? aws_secretsmanager_secret.internal_ca[0].arn : ""
-    overmind_container_port = var.overmind_container_port
-    environment             = var.environment
-  })
 }
 
 resource "aws_instance" "overmind" {
