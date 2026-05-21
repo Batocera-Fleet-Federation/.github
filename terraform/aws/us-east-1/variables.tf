@@ -199,3 +199,9 @@ variable "enable_internal_ca_secret" {
   type        = bool
   default     = false
 }
+
+variable "use_fake_data" {
+  description = "Whether to use fake data in Overmind for testing and development purposes. This may include mock game data, simulated user activity, or other non-production data to facilitate testing without affecting real data."
+  type        = bool
+  default     = false
+}

@@ -13,6 +13,7 @@ locals {
     environment             = var.environment
     aws_ses_from_address    = "no-reply@${trimsuffix(var.domain_name, ".")}"
     email_provider          = "ses"
+    use_fake_data           = var.use_fake_data
   })
 }
 

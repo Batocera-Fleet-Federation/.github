@@ -21,6 +21,7 @@ DOMAIN_NAME="${domain_name}"
 ENVIRONMENT="${environment}"
 AWS_SES_FROM_ADDRESS="${aws_ses_from_address}"
 EMAIL_PROVIDER="${email_provider}"
+USE_FAKE_DATA="${use_fake_data}"
 
 aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "${ecr_registry_url}"
 docker pull "$IMAGE"
@@ -53,6 +54,7 @@ docker run -d \
   -e AWS_REGION="$AWS_REGION" \
   -e AWS_SES_FROM_ADDRESS="$AWS_SES_FROM_ADDRESS" \
   -e EMAIL_PROVIDER="$EMAIL_PROVIDER" \
+  -e USE_FAKE_DATA="$USE_FAKE_DATA" \
   -p 127.0.0.1:$CONTAINER_PORT:8000 \
   "$IMAGE"
 
