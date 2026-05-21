@@ -53,15 +53,18 @@ docker run -d \
 
 cat >/opt/overmind/Caddyfile <<CADDY
 $DOMAIN_NAME {
-  reverse_proxy 127.0.0.1:$CONTAINER_PORT
+  reverse_proxy https://127.0.0.1:$CONTAINER_PORT {
+    transport http {
+      tls_insecure_skip_verify
+    }
+  }
 }
 CADDY
 
 docker run -d \
   --name overmind-caddy \
   --restart unless-stopped \
-  -p 80:80 \
-  -p 443:443 \
+  --network host \
   -v /opt/overmind/Caddyfile:/etc/caddy/Caddyfile:ro \
   -v overmind-caddy-data:/data \
   -v overmind-caddy-config:/config \
@@ -87,4 +90,5 @@ WantedBy=multi-user.target
 UNIT
 
 systemctl daemon-reload
-systemctl enable overmind.service
+systemctl enable --now overmind.service
+systemctl status overmind.service --no-pager || true

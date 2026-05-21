@@ -14,16 +14,16 @@ hosted_zone_id        = ""
 create_route53_record = true
 
 certificate_sans = [
-  "www.batocera-swarm.com",
-  "overmind.batocera-swarm.com",
+  "www.batocera-swarm.com"
 ]
 create_acm_validation_records = true
 
 ecr_repository_name = "batocera-overmind"
 instance_type       = "t3.micro"
 db_instance_class   = "db.t3.micro"
-availability_zones  = ["us-east-1a"]
-ami_id              = "resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+availability_zones  = ["us-east-1a", "us-east-1b"]
+public_subnet_cidrs = ["10.42.10.0/24", "10.42.20.0/24"]
+ami_id              = ""
 
 # Optional break-glass SSH. Prefer SSM Session Manager.
 admin_ssh_cidr = ""

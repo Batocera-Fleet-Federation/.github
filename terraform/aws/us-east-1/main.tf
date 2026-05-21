@@ -114,7 +114,8 @@ resource "aws_internet_gateway" "overmind" {
 }
 
 resource "aws_subnet" "public" {
-  count                   = 2
+  # Create up to 2 public subnets, but don't exceed the number of available AZs
+  count                   = min(2, length(local.availability_zones))
   vpc_id                  = aws_vpc.overmind.id
   cidr_block              = var.public_subnet_cidrs[count.index]
   availability_zone       = local.availability_zones[count.index]
@@ -198,8 +199,9 @@ resource "aws_security_group" "db" {
 }
 
 resource "random_password" "db_password" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 resource "random_password" "secret_key" {
@@ -360,7 +362,7 @@ resource "aws_instance" "overmind" {
 
   root_block_device {
     volume_type = "gp3"
-    volume_size = 12
+    volume_size = 30
     encrypted   = true
   }
 }
@@ -375,8 +377,9 @@ resource "aws_eip_association" "overmind" {
 }
 
 resource "aws_route53_record" "overmind" {
-  count   = var.create_route53_record ? 1 : 0
+  count   = var.create_route53_record && local.overmind_fqdn != local.www_domain ? 1 : 0
   zone_id = local.route53_zone_id
+  allow_overwrite = true
   name    = local.overmind_fqdn
   type    = "A"
   ttl     = 300
@@ -386,6 +389,7 @@ resource "aws_route53_record" "overmind" {
 resource "aws_route53_record" "apex" {
   count   = var.create_route53_record && local.overmind_fqdn != local.root_domain ? 1 : 0
   zone_id = local.route53_zone_id
+  allow_overwrite = true
   name    = local.root_domain
   type    = "A"
   ttl     = 300
@@ -393,8 +397,19 @@ resource "aws_route53_record" "apex" {
 }
 
 resource "aws_route53_record" "www" {
-  count   = var.create_route53_record ? 1 : 0
+  count   = var.create_route53_record && local.overmind_fqdn != local.www_domain ? 1 : 0
   zone_id = local.route53_zone_id
+  allow_overwrite = true
+  name    = local.www_domain
+  type    = "A"
+  ttl     = 300
+  records = [aws_eip.overmind.public_ip]
+}
+
+resource "aws_route53_record" "primary" {
+  count   = var.create_route53_record && local.overmind_fqdn == local.www_domain ? 1 : 0
+  zone_id = local.route53_zone_id
+  allow_overwrite = true
   name    = local.www_domain
   type    = "A"
   ttl     = 300

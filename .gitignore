@@ -108,3 +108,6 @@ data/roms/**
 *.lock.hcl
 *.tfvars.example
 *.tfpl
+*.tfstate.lock.info
+*.tfstate.backup
+*.tfstate

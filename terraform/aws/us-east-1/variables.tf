@@ -91,7 +91,7 @@ variable "vpc_cidr" {
 variable "public_subnet_cidrs" {
   description = "Two public subnet CIDRs. RDS is private by public accessibility=false and security groups."
   type        = list(string)
-  default     = ["10.42.10.0/24", "10.42.20.0/24"]
+  default     = ["10.42.10.0/24"]
 }
 
 variable "availability_zones" {
