@@ -1,4 +1,37 @@
+# TL;DR Terraform with Values
+
+For immediate deployment with sensible defaults:
+
+```bash
+cd .github/terraform/aws/us-east-1
+cp terraform.tfvars.example terraform.tfvars
+
+# Minimal required edits (replace with your values):
+sed -i '' \
+  -e 's/domain_name = "batocera-swarm.com"/domain_name = "yourdomain.com"/' \
+  -e 's/github_org = "Batocera-Fleet-Federation"/github_org = "YOUR-ORG"/' \
+  -e 's/github_repo = "batocera.overmind"/github_repo = "YOUR-REPO"/' \
+  terraform.tfvars
+
+# Or edit manually and ensure these are set:
+# domain_name          = "yourdomain.com"
+# github_org           = "YOUR-GITHUB-ORG"
+# github_repo          = "YOUR-GITHUB-REPO"
+# create_hosted_zone   = true              (or false if zone exists)
+# aws_region           = "us-east-1"
+
+# Then apply:
+terraform init && terraform fmt && terraform validate && terraform apply
+```
+
+Outputs needed for GitHub Actions setup:
+```bash
+terraform output -json | jq '.github_actions_role_arn.value, .ecr_repository_url.value, .ec2_instance_id.value'
+```
+
 # Batocera Overmind on AWS, us-east-1
+
+**Status: ✅ Ready to deploy** against existing AWS accounts.
 
 This Terraform stack deploys Overmind on low-cost AWS infrastructure:
 
@@ -14,6 +47,44 @@ This Terraform stack deploys Overmind on low-cost AWS infrastructure:
 
 The default public hostname is `batocera-swarm.com`. Set `overmind_subdomain = "overmind"` if you want Overmind at `overmind.batocera-swarm.com` while still creating root and `www` records.
 
+## Quick Start (5 Steps)
+
+**Prerequisites:**
+- AWS account with admin IAM permissions
+- Terraform ≥ 1.6 installed locally
+- Push access to `Batocera-Fleet-Federation/batocera.overmind` on GitHub
+- A domain name you own (or use `batocera-swarm.com` for testing)
+
+**Deployment:**
+
+```bash
+# 1. Prepare configuration
+cd .github/terraform/aws/us-east-1
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars: domain_name, github_org, github_repo, create_hosted_zone
+
+# 2. Initialize and validate
+terraform init && terraform fmt && terraform validate
+
+# 3. Plan and apply
+terraform plan
+terraform apply
+
+# 4. Capture outputs for GitHub Actions
+terraform output github_actions_role_arn
+terraform output ecr_repository_url
+terraform output ec2_instance_id
+
+# 5. Deploy (auto on git push, or manual via SSM)
+# After apply, push to main branch → GitHub Actions deploys
+# OR manually trigger: aws ssm send-command \
+#   --instance-ids "$(terraform output -raw ec2_instance_id)" \
+#   --document-name AWS-RunShellScript \
+#   --parameters commands='["/opt/overmind/deploy.sh"]'
+```
+
+**Estimated time:** ~15–20 minutes (init: 2–5s, apply: 8–12min, DNS propagation: 5–10min).
+
 ## Architecture Choice
 
 The initial compute target is EC2 + Docker instead of ECS/Fargate + ALB. That keeps the resource list small and avoids always-on ALB and NAT Gateway costs. HTTPS for the EC2-hosted app is handled by Caddy with Let's Encrypt because ACM public certificates cannot be exported and attached directly to a process on EC2. The stack still provisions an ACM certificate for future ALB/CloudFront use and for domain readiness.
@@ -24,89 +95,97 @@ Public browser TLS is provided by Caddy/Let's Encrypt for the configured Overmin
 
 The optional `enable_internal_ca_secret` variable creates a separate private CA secret for future Drone trust workflows. That private key is stored in Secrets Manager and Terraform state, so leave it disabled unless the application explicitly needs Terraform-created internal CA material.
 
-## Setup
+## Detailed Configuration
 
-Copy the example variables:
-
-```bash
-cd .github/terraform/aws/us-east-1
-cp terraform.tfvars.example terraform.tfvars
-```
-
-Edit at least:
+Edit `terraform.tfvars` with your environment:
 
 ```hcl
-github_org  = "Batocera-Fleet-Federation"
-github_repo = "batocera.overmind"
+# Domain and DNS
+domain_name          = "batocera-swarm.com"      # Your registered domain
+overmind_subdomain   = ""                        # "" for apex, "overmind" for subdomain
+create_hosted_zone   = true                      # true: create new zone, false: use existing
+hosted_zone_id       = ""                        # If using existing zone, set ID
+create_route53_record = true                     # Create A records for root/www/overmind
+
+# GitHub OIDC for CI/CD
+github_org    = "Batocera-Fleet-Federation"     # Org name
+github_repo   = "batocera.overmind"             # Repo containing deploy workflow
+github_branch = "main"                          # Branch allowed to deploy
+
+# AWS & compute
+aws_region    = "us-east-1"
+instance_type = "t3.micro"                      # t3.micro is free-tier eligible
+ami_id        = "resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+
+# Database
+db_instance_class = "db.t3.micro"               # Upgrade to db.t3.small for production
+db_allocated_storage = 20                       # GiB
+db_deletion_protection = false                  # Set true for production
+
+# Optional: break-glass SSH access
+admin_ssh_cidr = ""                             # Leave empty to disable SSH
+ssh_key_name   = ""                             # EC2 key pair name if needed
+
+# Optional: internal CA for Drone trust (rarely used)
+enable_internal_ca_secret = false
 ```
 
-Choose how DNS is managed:
+**DNS scenarios:**
 
-```hcl
-create_hosted_zone    = true
-create_route53_record = true
-```
+1. **New domain + new hosted zone:**
+   ```hcl
+   create_hosted_zone    = true
+   create_route53_record = true
+   ```
+   After apply, point domain registrar to nameservers from `terraform output hosted_zone_nameservers`.
 
-If a hosted zone already exists, use:
+2. **Existing hosted zone in AWS:**
+   ```hcl
+   create_hosted_zone    = false
+   hosted_zone_id        = "Z1234567890ABC"
+   create_route53_record = true
+   ```
 
-```hcl
-create_hosted_zone = false
-hosted_zone_id     = "Z1234567890"
-```
+3. **DNS managed elsewhere (no Route 53 records):**
+   ```hcl
+   create_hosted_zone    = false
+   create_route53_record = false
+   ```
+   Create A records manually using `terraform output manual_dns_record` values.
 
-Deploy:
+## GitHub Actions Setup
 
+After `terraform apply` succeeds, configure GitHub Actions repository variables in `Batocera-Fleet-Federation/batocera.overmind`:
+
+Settings → Secrets and variables → Actions → Repository variables
+
+| Variable | Value |
+|----------|-------|
+| `AWS_REGION` | `us-east-1` |
+| `AWS_ROLE_TO_ASSUME` | `terraform output github_actions_role_arn` |
+| `ECR_REPOSITORY` | `batocera-overmind` |
+| `OVERMIND_ENVIRONMENT` | `prod` |
+| `OVERMIND_PROJECT_NAME` | `bff-overmind` |
+
+**No AWS credentials needed.** The workflow uses GitHub OIDC to assume the deploy role.
+
+## Deployment Workflows
+
+**Automatic deployment on git push:**
+- Push to `main` → GitHub Actions builds, pushes to ECR, and deploys via SSM.
+
+**Manual deployment via SSM:**
 ```bash
-terraform init
-terraform fmt
-terraform validate
-terraform plan
-terraform apply
+aws ssm send-command \
+  --region us-east-1 \
+  --instance-ids "$(terraform output -raw ec2_instance_id)" \
+  --document-name AWS-RunShellScript \
+  --parameters commands='["/opt/overmind/deploy.sh IMAGE_TAG"]'
 ```
+Replace `IMAGE_TAG` with ECR image tag (e.g., `latest` or git SHA).
 
-If `create_route53_record = false`, create the DNS records shown by:
-
-```bash
-terraform output manual_dns_record
-```
-
-They will be `A` records for the apex, `www`, and the configured Overmind hostname pointing at the instance Elastic IP.
-
-If `create_hosted_zone = true`, publish the nameservers shown by:
-
-```bash
-terraform output hosted_zone_nameservers
-```
-
-The ACM certificate ARN is available through:
-
-```bash
-terraform output acm_certificate_arn
-```
-
-## GitHub Actions Variables
-
-Set these repository variables in `batocera.overmind`, which owns `.github/workflows/deploy-overmind-aws.yml`:
-
-- `AWS_REGION`: `us-east-1`
-- `AWS_ROLE_TO_ASSUME`: value of `terraform output github_actions_role_arn`
-- `ECR_REPOSITORY`: `batocera-overmind`
-- `OVERMIND_ENVIRONMENT`: `prod`
-- `OVERMIND_PROJECT_NAME`: `bff-overmind`
-
-No long-lived AWS keys are required. The workflow uses GitHub OIDC to assume the deploy role.
-
-## Deployment Flow
-
-The workflow:
-
-1. Checks out `batocera.overmind`.
-2. Builds the Overmind Docker image.
-3. Pushes tags `${git_sha}` and `latest` to ECR.
-4. Finds the running EC2 instance by Terraform tags.
-5. Uses SSM Run Command to run `/opt/overmind/deploy.sh <image>`.
-
-Manual dispatch deploys the current branch/ref. Pushes to Overmind application or Docker files on `main` also deploy.
+**Manual dispatch from GitHub:**
+The `.github/workflows/deploy-overmind-aws.yml` workflow supports `workflow_dispatch` for on-demand deployments from the GitHub UI.
 
 ## Application Persistence
 
@@ -140,6 +219,45 @@ After Terraform and DNS:
 6. Log in again and confirm the user and Drone token data persisted.
 7. Confirm `https://batocera-swarm.com` is unchanged.
 
+## Known Limitations & Next Steps
+
+**Email verification (AWS SES):**
+The Python application code includes AWS SES email driver support, but Terraform does not yet provision SES resources. For production email functionality, manually:
+1. Verify the SES domain in AWS (Settings → Verified identities).
+2. Add to `terraform.tfvars`:
+   ```hcl
+   enable_ses_setup = true
+   ses_domain = "theoutlawoasis.com"
+   ```
+3. Create Terraform SES domain resource (not yet in this module).
+4. Update the EC2 Secrets Manager runtime environment to include:
+   ```json
+   "EMAIL_DRIVER": "ses",
+   "EMAIL_FROM": "noreply@theoutlawoasis.com"
+   ```
+
+**RDS burstable instance:**
+`db.t3.micro` is appropriate for development. For production traffic, upgrade to `db.t3.small` or `db.t3.medium` and set `db_deletion_protection = true`.
+
+**Caddy Let's Encrypt:**
+Requires ports 80 and 443 open to the internet during certificate issuance and renewal. If your firewall blocks outbound ACME, configure a custom ACME provider.
+
+**GitHub OIDC provider:**
+If your AWS account already has a GitHub OIDC provider, Terraform will fail to create a duplicate. Either:
+- Import the existing provider: `terraform import aws_iam_openid_connect_provider.github <provider_arn>`
+- Comment out the `aws_iam_openid_connect_provider` resource and update `aws_iam_role` assumptions to reference the existing provider.
+
+**Terraform state security:**
+This stack stores sensitive data (RDS password, internal CA key if enabled) in Terraform state. Use remote state with encryption (e.g., S3 + DynamoDB lock) for production:
+```bash
+# terraform backend config (create backend.tf or use -backend-config flags)
+terraform init -backend-config="bucket=my-tf-state" \
+               -backend-config="key=bff-overmind/prod/terraform.tfstate" \
+               -backend-config="dynamodb_table=terraform-lock" \
+               -backend-config="region=us-east-1" \
+               -backend-config="encrypt=true"
+```
+
 ## Cost Notes
 
 Cost-impacting resources:
@@ -152,8 +270,10 @@ Cost-impacting resources:
 
 This stack intentionally avoids NAT Gateway, ALB, ECS/Fargate, and Multi-AZ RDS by default.
 
-## Limitations
+## Architecture Choices
 
-- Caddy uses Let's Encrypt rather than ACM because there is no ALB/CloudFront in this low-cost design.
-- The GitHub OIDC provider is created in this state. If your AWS account already has a GitHub OIDC provider, import it or refactor this stack to reference the existing provider.
-- RDS is in private mode by `publicly_accessible=false` and security group isolation, but the subnets have internet routes to avoid NAT Gateway cost.
+The initial compute target is EC2 + Docker instead of ECS/Fargate + ALB. That keeps the resource list small and avoids always-on ALB and NAT Gateway costs. HTTPS for the EC2-hosted app is handled by Caddy with Let's Encrypt because ACM public certificates cannot be exported and attached directly to a process on EC2. The stack still provisions an ACM certificate for future ALB/CloudFront use and for domain readiness.
+
+Public browser TLS is provided by Caddy/Let's Encrypt for the configured Overmind hostname. ACM certificate DNS validation records are also managed when `create_acm_validation_records = true`.
+
+The optional `enable_internal_ca_secret` variable creates a separate private CA secret for future Drone trust workflows. That private key is stored in Secrets Manager and Terraform state, so leave it disabled unless the application explicitly needs Terraform-created internal CA material.
