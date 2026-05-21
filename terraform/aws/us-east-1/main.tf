@@ -1,10 +1,12 @@
 data "aws_availability_zones" "available" {
+  count = length(var.availability_zones) == 0 ? 1 : 0
   state = "available"
 }
 
 data "aws_caller_identity" "current" {}
 
 data "aws_ami" "amazon_linux_2023" {
+  count       = var.ami_id == "" ? 1 : 0
   most_recent = true
   owners      = ["amazon"]
 
@@ -20,9 +22,60 @@ data "aws_ami" "amazon_linux_2023" {
 }
 
 data "aws_route53_zone" "selected" {
-  count        = var.create_route53_record ? 1 : 0
+  count        = var.create_hosted_zone || var.hosted_zone_id != "" ? 0 : 1
   name         = var.hosted_zone_name
   private_zone = false
+}
+
+locals {
+  root_domain              = trimsuffix(var.domain_name, ".")
+  computed_overmind_domain = var.overmind_subdomain == "" ? local.root_domain : "${var.overmind_subdomain}.${local.root_domain}"
+  overmind_fqdn            = var.overmind_domain_name == "" ? local.computed_overmind_domain : trimsuffix(var.overmind_domain_name, ".")
+  www_domain               = "www.${local.root_domain}"
+  availability_zones       = length(var.availability_zones) == 0 ? data.aws_availability_zones.available[0].names : var.availability_zones
+  instance_ami_id          = var.ami_id == "" ? data.aws_ami.amazon_linux_2023[0].id : var.ami_id
+  route53_zone_id          = var.create_hosted_zone ? aws_route53_zone.domain[0].zone_id : (var.hosted_zone_id != "" ? var.hosted_zone_id : data.aws_route53_zone.selected[0].zone_id)
+  certificate_sans = distinct(compact(concat(
+    [local.www_domain, local.overmind_fqdn == local.root_domain ? "" : local.overmind_fqdn],
+    var.certificate_sans
+  )))
+}
+
+resource "aws_route53_zone" "domain" {
+  count = var.create_hosted_zone ? 1 : 0
+  name  = local.root_domain
+}
+
+resource "aws_acm_certificate" "domain" {
+  domain_name               = local.root_domain
+  subject_alternative_names = local.certificate_sans
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "acm_validation" {
+  for_each = var.create_acm_validation_records ? {
+    for option in aws_acm_certificate.domain.domain_validation_options : option.domain_name => {
+      name   = option.resource_record_name
+      record = option.resource_record_value
+      type   = option.resource_record_type
+    }
+  } : {}
+
+  zone_id = local.route53_zone_id
+  name    = each.value.name
+  type    = each.value.type
+  ttl     = 300
+  records = [each.value.record]
+}
+
+resource "aws_acm_certificate_validation" "domain" {
+  count                   = var.create_acm_validation_records ? 1 : 0
+  certificate_arn         = aws_acm_certificate.domain.arn
+  validation_record_fqdns = [for record in aws_route53_record.acm_validation : record.fqdn]
 }
 
 resource "aws_ecr_repository" "overmind" {
@@ -64,7 +117,7 @@ resource "aws_subnet" "public" {
   count                   = 2
   vpc_id                  = aws_vpc.overmind.id
   cidr_block              = var.public_subnet_cidrs[count.index]
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  availability_zone       = local.availability_zones[count.index]
   map_public_ip_on_launch = true
 }
 
@@ -284,8 +337,9 @@ locals {
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     aws_region              = var.aws_region
     ecr_repository_url      = aws_ecr_repository.overmind.repository_url
+    ecr_registry_url        = split("/", aws_ecr_repository.overmind.repository_url)[0]
     image                   = local.image_latest
-    domain_name             = var.overmind_domain_name
+    domain_name             = local.overmind_fqdn
     runtime_secret_id       = aws_secretsmanager_secret.overmind_runtime.arn
     internal_ca_secret_id   = var.enable_internal_ca_secret ? aws_secretsmanager_secret.internal_ca[0].arn : ""
     overmind_container_port = var.overmind_container_port
@@ -294,7 +348,7 @@ locals {
 }
 
 resource "aws_instance" "overmind" {
-  ami                         = data.aws_ami.amazon_linux_2023.id
+  ami                         = local.instance_ami_id
   instance_type               = var.instance_type
   subnet_id                   = aws_subnet.public[0].id
   vpc_security_group_ids      = [aws_security_group.app.id]
@@ -322,8 +376,26 @@ resource "aws_eip_association" "overmind" {
 
 resource "aws_route53_record" "overmind" {
   count   = var.create_route53_record ? 1 : 0
-  zone_id = data.aws_route53_zone.selected[0].zone_id
-  name    = var.overmind_domain_name
+  zone_id = local.route53_zone_id
+  name    = local.overmind_fqdn
+  type    = "A"
+  ttl     = 300
+  records = [aws_eip.overmind.public_ip]
+}
+
+resource "aws_route53_record" "apex" {
+  count   = var.create_route53_record && local.overmind_fqdn != local.root_domain ? 1 : 0
+  zone_id = local.route53_zone_id
+  name    = local.root_domain
+  type    = "A"
+  ttl     = 300
+  records = [aws_eip.overmind.public_ip]
+}
+
+resource "aws_route53_record" "www" {
+  count   = var.create_route53_record ? 1 : 0
+  zone_id = local.route53_zone_id
+  name    = local.www_domain
   type    = "A"
   ttl     = 300
   records = [aws_eip.overmind.public_ip]

@@ -16,22 +16,58 @@ variable "environment" {
   default     = "prod"
 }
 
-variable "overmind_domain_name" {
-  description = "Subdomain for Overmind. This module only manages this record, never the apex or www records."
+variable "domain_name" {
+  description = "Root domain hosted for Batocera Swarm."
   type        = string
-  default     = "overmind.theoutlawoasis.com"
+  default     = "batocera-swarm.com"
+}
+
+variable "overmind_subdomain" {
+  description = "Subdomain for Overmind. Empty string hosts Overmind at the apex domain."
+  type        = string
+  default     = ""
+}
+
+variable "overmind_domain_name" {
+  description = "Optional full hostname override for Overmind. Empty uses overmind_subdomain.domain_name or the apex."
+  type        = string
+  default     = ""
 }
 
 variable "hosted_zone_name" {
-  description = "Existing Route 53 hosted zone name. Leave create_route53_record=false if DNS is managed elsewhere."
+  description = "Existing Route 53 hosted zone name when create_hosted_zone=false and hosted_zone_id is empty."
   type        = string
-  default     = "theoutlawoasis.com"
+  default     = "batocera-swarm.com"
+}
+
+variable "create_hosted_zone" {
+  description = "Create a public Route 53 hosted zone for domain_name."
+  type        = bool
+  default     = false
+}
+
+variable "hosted_zone_id" {
+  description = "Existing Route 53 hosted zone ID. Leave empty to look up hosted_zone_name or create a new zone."
+  type        = string
+  default     = ""
 }
 
 variable "create_route53_record" {
-  description = "Create only the Overmind subdomain A record in the existing hosted zone."
+  description = "Create Route 53 A records for the apex, www, and Overmind hostname."
   type        = bool
   default     = false
+}
+
+variable "certificate_sans" {
+  description = "Additional ACM certificate subject alternative names."
+  type        = list(string)
+  default     = []
+}
+
+variable "create_acm_validation_records" {
+  description = "Create Route 53 DNS validation records for the ACM certificate."
+  type        = bool
+  default     = true
 }
 
 variable "ecr_repository_name" {
@@ -56,6 +92,18 @@ variable "public_subnet_cidrs" {
   description = "Two public subnet CIDRs. RDS is private by public accessibility=false and security groups."
   type        = list(string)
   default     = ["10.42.10.0/24", "10.42.20.0/24"]
+}
+
+variable "availability_zones" {
+  description = "Optional explicit availability zones. Leave empty to discover available AZs."
+  type        = list(string)
+  default     = []
+}
+
+variable "ami_id" {
+  description = "Optional AMI ID or EC2-supported SSM dynamic reference. Leave empty to discover latest Amazon Linux 2023."
+  type        = string
+  default     = ""
 }
 
 variable "admin_ssh_cidr" {

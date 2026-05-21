@@ -1,0 +1,90 @@
+#!/bin/bash
+set -euo pipefail
+
+dnf update -y
+dnf install -y docker amazon-ssm-agent awscli
+systemctl enable --now docker
+systemctl enable --now amazon-ssm-agent
+
+mkdir -p /opt/overmind
+
+cat >/opt/overmind/deploy.sh <<'SCRIPT'
+#!/bin/bash
+set -euo pipefail
+
+IMAGE="$${1:-${image}}"
+AWS_REGION="${aws_region}"
+RUNTIME_SECRET_ID="${runtime_secret_id}"
+INTERNAL_CA_SECRET_ID="${internal_ca_secret_id}"
+CONTAINER_PORT="${overmind_container_port}"
+DOMAIN_NAME="${domain_name}"
+ENVIRONMENT="${environment}"
+
+aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "${ecr_registry_url}"
+docker pull "$IMAGE"
+
+aws secretsmanager get-secret-value \
+  --region "$AWS_REGION" \
+  --secret-id "$RUNTIME_SECRET_ID" \
+  --query SecretString \
+  --output text >/opt/overmind/runtime.json
+
+python3 - <<'PY' >/opt/overmind/overmind.env
+import json
+from pathlib import Path
+
+data = json.loads(Path("/opt/overmind/runtime.json").read_text())
+for key, value in data.items():
+    print(f"{key}={value}")
+PY
+chmod 600 /opt/overmind/overmind.env
+rm -f /opt/overmind/runtime.json
+
+docker rm -f overmind 2>/dev/null || true
+docker rm -f overmind-caddy 2>/dev/null || true
+docker run -d \
+  --name overmind \
+  --restart unless-stopped \
+  --env-file /opt/overmind/overmind.env \
+  -e OVERMIND_ENVIRONMENT="$ENVIRONMENT" \
+  -e BASE_URL="https://$DOMAIN_NAME" \
+  -p 127.0.0.1:$CONTAINER_PORT:8000 \
+  "$IMAGE"
+
+cat >/opt/overmind/Caddyfile <<CADDY
+$DOMAIN_NAME {
+  reverse_proxy 127.0.0.1:$CONTAINER_PORT
+}
+CADDY
+
+docker run -d \
+  --name overmind-caddy \
+  --restart unless-stopped \
+  -p 80:80 \
+  -p 443:443 \
+  -v /opt/overmind/Caddyfile:/etc/caddy/Caddyfile:ro \
+  -v overmind-caddy-data:/data \
+  -v overmind-caddy-config:/config \
+  caddy:2
+SCRIPT
+chmod +x /opt/overmind/deploy.sh
+
+cat >/etc/systemd/system/overmind.service <<'UNIT'
+[Unit]
+Description=Batocera Overmind container
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/overmind/deploy.sh
+ExecStop=/usr/bin/docker rm -f overmind overmind-caddy
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable overmind.service

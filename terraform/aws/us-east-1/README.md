@@ -9,16 +9,18 @@ This Terraform stack deploys Overmind on low-cost AWS infrastructure:
 - AWS Secrets Manager for database credentials and `SECRET_KEY`.
 - SSM Session Manager/Run Command for deployment, so SSH can stay disabled.
 - GitHub Actions OIDC role for image push and SSM deployment.
+- Optional Route 53 public hosted zone for `batocera-swarm.com`.
+- ACM public certificate for `batocera-swarm.com`, `www.batocera-swarm.com`, and configured SANs, with optional DNS validation records.
 
-The default public hostname is `overmind.theoutlawoasis.com`. This stack does **not** manage `www.theoutlawoasis.com` or the apex record. Keep `create_route53_record = false` if DNS for `theoutlawoasis.com` is managed by another Terraform state.
+The default public hostname is `batocera-swarm.com`. Set `overmind_subdomain = "overmind"` if you want Overmind at `overmind.batocera-swarm.com` while still creating root and `www` records.
 
 ## Architecture Choice
 
-The initial compute target is EC2 + Docker instead of ECS/Fargate + ALB. That keeps the resource list small and avoids always-on ALB and NAT Gateway costs. HTTPS is handled by Caddy with Let's Encrypt because ACM public certificates cannot be exported and attached directly to a process on EC2. If you later want ACM-managed certificates, add an ALB or CloudFront in front of the instance and accept that cost.
+The initial compute target is EC2 + Docker instead of ECS/Fargate + ALB. That keeps the resource list small and avoids always-on ALB and NAT Gateway costs. HTTPS for the EC2-hosted app is handled by Caddy with Let's Encrypt because ACM public certificates cannot be exported and attached directly to a process on EC2. The stack still provisions an ACM certificate for future ALB/CloudFront use and for domain readiness.
 
 ## Public TLS vs Internal Drone CA
 
-Public browser TLS is provided by Caddy/Let's Encrypt for `overmind.theoutlawoasis.com`.
+Public browser TLS is provided by Caddy/Let's Encrypt for the configured Overmind hostname. ACM certificate DNS validation records are also managed when `create_acm_validation_records = true`.
 
 The optional `enable_internal_ca_secret` variable creates a separate private CA secret for future Drone trust workflows. That private key is stored in Secrets Manager and Terraform state, so leave it disabled unless the application explicitly needs Terraform-created internal CA material.
 
@@ -38,10 +40,18 @@ github_org  = "Batocera-Fleet-Federation"
 github_repo = "batocera.overmind"
 ```
 
-Leave this disabled unless this state should create the subdomain record:
+Choose how DNS is managed:
 
 ```hcl
-create_route53_record = false
+create_hosted_zone    = true
+create_route53_record = true
+```
+
+If a hosted zone already exists, use:
+
+```hcl
+create_hosted_zone = false
+hosted_zone_id     = "Z1234567890"
 ```
 
 Deploy:
@@ -54,13 +64,25 @@ terraform plan
 terraform apply
 ```
 
-If `create_route53_record = false`, create the DNS record shown by:
+If `create_route53_record = false`, create the DNS records shown by:
 
 ```bash
 terraform output manual_dns_record
 ```
 
-It will be an `A` record for `overmind.theoutlawoasis.com` pointing at the instance Elastic IP.
+They will be `A` records for the apex, `www`, and the configured Overmind hostname pointing at the instance Elastic IP.
+
+If `create_hosted_zone = true`, publish the nameservers shown by:
+
+```bash
+terraform output hosted_zone_nameservers
+```
+
+The ACM certificate ARN is available through:
+
+```bash
+terraform output acm_certificate_arn
+```
 
 ## GitHub Actions Variables
 
@@ -105,7 +127,7 @@ In production mode, startup fails clearly if PostgreSQL configuration is absent.
 After Terraform and DNS:
 
 1. Run the deploy workflow.
-2. Visit `https://overmind.theoutlawoasis.com/`.
+2. Visit `https://batocera-swarm.com/`.
 3. Create an Overlord user.
 4. Generate a Drone token.
 5. Restart the app container:
@@ -116,7 +138,7 @@ After Terraform and DNS:
      --parameters commands='["sudo systemctl restart overmind.service"]'
    ```
 6. Log in again and confirm the user and Drone token data persisted.
-7. Confirm `https://www.theoutlawoasis.com` is unchanged.
+7. Confirm `https://batocera-swarm.com` is unchanged.
 
 ## Cost Notes
 
