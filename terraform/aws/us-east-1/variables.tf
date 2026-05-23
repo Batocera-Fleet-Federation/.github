@@ -70,6 +70,17 @@ variable "create_acm_validation_records" {
   default     = true
 }
 
+variable "route53_mail_records" {
+  description = "Additional Route 53 mail-related DNS records, keyed by a stable record id. Use an empty name for the zone apex."
+  type = map(object({
+    name    = string
+    type    = string
+    ttl     = optional(number, 300)
+    records = list(string)
+  }))
+  default = {}
+}
+
 variable "ecr_repository_name" {
   description = "ECR repository for the Overmind container."
   type        = string
@@ -204,4 +215,48 @@ variable "use_fake_data" {
   description = "Whether to use fake data in Overmind for testing and development purposes. This may include mock game data, simulated user activity, or other non-production data to facilitate testing without affecting real data."
   type        = bool
   default     = false
+}
+
+variable "email_provider" {
+  description = "Outbound email provider used by Overmind."
+  type        = string
+  default     = "smtp"
+}
+
+variable "email_from_address" {
+  description = "Sender email address for Overmind mail."
+  type        = string
+  default     = ""
+}
+
+variable "smtp_host" {
+  description = "SMTP server hostname."
+  type        = string
+  default     = "smtp.purelymail.com"
+}
+
+variable "smtp_port" {
+  description = "SMTP server port."
+  type        = number
+  default     = 587
+}
+
+variable "smtp_username" {
+  description = "SMTP username. Often the full Purelymail mailbox address."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "smtp_password" {
+  description = "SMTP password."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "smtp_starttls" {
+  description = "Use STARTTLS for SMTP."
+  type        = bool
+  default     = true
 }

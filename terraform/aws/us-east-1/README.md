@@ -221,20 +221,11 @@ After Terraform and DNS:
 
 ## Known Limitations & Next Steps
 
-**Email verification (AWS SES):**
-The Python application code includes AWS SES email driver support, but Terraform does not yet provision SES resources. For production email functionality, manually:
-1. Verify the SES domain in AWS (Settings → Verified identities).
-2. Add to `terraform.tfvars`:
-   ```hcl
-   enable_ses_setup = true
-   ses_domain = "theoutlawoasis.com"
-   ```
-3. Create Terraform SES domain resource (not yet in this module).
-4. Update the EC2 Secrets Manager runtime environment to include:
-   ```json
-   "EMAIL_DRIVER": "ses",
-   "EMAIL_FROM": "noreply@theoutlawoasis.com"
-   ```
+**Email verification (Purelymail SMTP):**
+Overmind sends production email through SMTP when `EMAIL_PROVIDER=smtp`. DNS and SMTP settings are driven from `terraform.tfvars`:
+1. Keep the Purelymail TXT, MX, DKIM, SPF, and DMARC records in `route53_mail_records`.
+2. Set `email_from_address`, `smtp_username`, and `smtp_password` for the Purelymail mailbox.
+3. Terraform stores the SMTP runtime settings in Secrets Manager and the EC2 deployment loads them into the container environment.
 
 **RDS burstable instance:**
 `db.t3.micro` is appropriate for development. For production traffic, upgrade to `db.t3.small` or `db.t3.medium` and set `db_deletion_protection = true`.

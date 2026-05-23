@@ -377,6 +377,15 @@ echo "Starting Batocera Overmind on https://localhost:${OVERMIND_PORT}"
   PYTHONPATH="$OVERMIND_DIR/src" \
   USE_FAKE_DATA="${USE_FAKE_DATA:-false}" \
   OVERMIND_PORT="$OVERMIND_PORT" \
+  EMAIL_PROVIDER="${EMAIL_PROVIDER:-}" \
+  EMAIL_FROM="${EMAIL_FROM:-}" \
+  SMTP_HOST="${SMTP_HOST:-}" \
+  SMTP_PORT="${SMTP_PORT:-}" \
+  SMTP_USERNAME="${SMTP_USERNAME:-}" \
+  SMTP_PASSWORD="${SMTP_PASSWORD:-}" \
+  SMTP_USE_SSL="${SMTP_USE_SSL:-}" \
+  SMTP_STARTTLS="${SMTP_STARTTLS:-}" \
+  PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-}" \
   "$OVERMIND_PYTHON_BIN" -m overmind.main --reload
 ) &
 OVERMIND_PID="$!"
@@ -389,6 +398,14 @@ Batocera stack is starting.
   Fake data: ${USE_FAKE_DATA:-false}
   Drone fake data root: ${DRONE_FAKE_USERDATA_ROOT}
   Overmind TLS cert: ${OVERMIND_TLS_CERT_FILE}
+
+Overmind email:
+  Provider: ${EMAIL_PROVIDER:-"(not set)"}
+  From:     ${EMAIL_FROM:-"(not set)"}
+  SMTP:     ${SMTP_HOST:-"(not set)"}${SMTP_PORT:+:${SMTP_PORT}}
+  Username: ${SMTP_USERNAME:-"(not set)"}
+  Password: ${SMTP_PASSWORD:+"(set)"}
+
   Drone mTLS CA:     ${DRONE_MTLS_CA_FILE}
   Drone TLS cert:    ${DRONE_CERT_FILE}
 

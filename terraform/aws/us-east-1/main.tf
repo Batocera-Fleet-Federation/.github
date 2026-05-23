@@ -64,55 +64,15 @@ resource "aws_acm_certificate_validation" "domain" {
   validation_record_fqdns = [for record in aws_route53_record.acm_validation : record.fqdn]
 }
 
-resource "aws_ses_domain_identity" "domain" {
-  domain = local.root_domain
-}
+resource "aws_route53_record" "mail" {
+  for_each = var.route53_mail_records
 
-resource "aws_route53_record" "ses_domain_verification" {
   zone_id         = local.route53_zone_id
   allow_overwrite = true
-  name            = "_amazonses.${local.root_domain}"
-  type            = "TXT"
-  ttl             = 300
-  records         = [aws_ses_domain_identity.domain.verification_token]
-}
-
-resource "aws_ses_domain_identity_verification" "domain" {
-  domain = aws_ses_domain_identity.domain.id
-
-  depends_on = [aws_route53_record.ses_domain_verification]
-}
-
-resource "aws_ses_domain_dkim" "domain" {
-  domain = aws_ses_domain_identity.domain.domain
-}
-
-resource "aws_route53_record" "ses_dkim" {
-  count           = 3
-  zone_id         = local.route53_zone_id
-  allow_overwrite = true
-  name            = "${aws_ses_domain_dkim.domain.dkim_tokens[count.index]}._domainkey.${local.root_domain}"
-  type            = "CNAME"
-  ttl             = 300
-  records         = ["${aws_ses_domain_dkim.domain.dkim_tokens[count.index]}.dkim.amazonses.com"]
-}
-
-resource "aws_route53_record" "ses_spf" {
-  zone_id         = local.route53_zone_id
-  allow_overwrite = true
-  name            = local.root_domain
-  type            = "TXT"
-  ttl             = 300
-  records         = ["v=spf1 include:amazonses.com ~all"]
-}
-
-resource "aws_route53_record" "ses_dmarc" {
-  zone_id         = local.route53_zone_id
-  allow_overwrite = true
-  name            = "_dmarc.${local.root_domain}"
-  type            = "TXT"
-  ttl             = 300
-  records         = ["v=DMARC1; p=none; rua=mailto:dmarc@${local.root_domain}"]
+  name            = each.value.name == "" ? local.root_domain : each.value.name
+  type            = upper(each.value.type)
+  ttl             = each.value.ttl
+  records         = each.value.records
 }
 
 resource "aws_ecr_repository" "overmind" {
@@ -287,8 +247,13 @@ resource "aws_secretsmanager_secret_version" "overmind_runtime" {
     OVERMIND_POSTGRES_PASSWORD = random_password.db_password.result
     SECRET_KEY                 = random_password.secret_key.result
     AWS_REGION                 = var.aws_region
-    AWS_SES_FROM_ADDRESS       = "no-reply@${local.root_domain}"
-    EMAIL_PROVIDER             = "ses"
+    EMAIL_PROVIDER             = var.email_provider
+    EMAIL_FROM                 = local.email_from_address
+    SMTP_HOST                  = var.smtp_host
+    SMTP_PORT                  = tostring(var.smtp_port)
+    SMTP_USERNAME              = var.smtp_username
+    SMTP_PASSWORD              = var.smtp_password
+    SMTP_STARTTLS              = tostring(var.smtp_starttls)
   })
 }
 
@@ -364,14 +329,6 @@ resource "aws_iam_role_policy" "instance" {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = compact([aws_secretsmanager_secret.overmind_runtime.arn, var.enable_internal_ca_secret ? aws_secretsmanager_secret.internal_ca[0].arn : ""])
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ses:SendEmail",
-          "ses:SendRawEmail"
-        ]
-        Resource = aws_ses_domain_identity.domain.arn
       }
     ]
   })
@@ -410,43 +367,43 @@ resource "aws_eip_association" "overmind" {
 }
 
 resource "aws_route53_record" "overmind" {
-  count   = var.create_route53_record && local.overmind_fqdn != local.www_domain ? 1 : 0
-  zone_id = local.route53_zone_id
+  count           = var.create_route53_record && local.overmind_fqdn != local.www_domain ? 1 : 0
+  zone_id         = local.route53_zone_id
   allow_overwrite = true
-  name    = local.overmind_fqdn
-  type    = "A"
-  ttl     = 300
-  records = [aws_eip.overmind.public_ip]
+  name            = local.overmind_fqdn
+  type            = "A"
+  ttl             = 300
+  records         = [aws_eip.overmind.public_ip]
 }
 
 resource "aws_route53_record" "apex" {
-  count   = var.create_route53_record && local.overmind_fqdn != local.root_domain ? 1 : 0
-  zone_id = local.route53_zone_id
+  count           = var.create_route53_record && local.overmind_fqdn != local.root_domain ? 1 : 0
+  zone_id         = local.route53_zone_id
   allow_overwrite = true
-  name    = local.root_domain
-  type    = "A"
-  ttl     = 300
-  records = [aws_eip.overmind.public_ip]
+  name            = local.root_domain
+  type            = "A"
+  ttl             = 300
+  records         = [aws_eip.overmind.public_ip]
 }
 
 resource "aws_route53_record" "www" {
-  count   = var.create_route53_record && local.overmind_fqdn != local.www_domain ? 1 : 0
-  zone_id = local.route53_zone_id
+  count           = var.create_route53_record && local.overmind_fqdn != local.www_domain ? 1 : 0
+  zone_id         = local.route53_zone_id
   allow_overwrite = true
-  name    = local.www_domain
-  type    = "A"
-  ttl     = 300
-  records = [aws_eip.overmind.public_ip]
+  name            = local.www_domain
+  type            = "A"
+  ttl             = 300
+  records         = [aws_eip.overmind.public_ip]
 }
 
 resource "aws_route53_record" "primary" {
-  count   = var.create_route53_record && local.overmind_fqdn == local.www_domain ? 1 : 0
-  zone_id = local.route53_zone_id
+  count           = var.create_route53_record && local.overmind_fqdn == local.www_domain ? 1 : 0
+  zone_id         = local.route53_zone_id
   allow_overwrite = true
-  name    = local.www_domain
-  type    = "A"
-  ttl     = 300
-  records = [aws_eip.overmind.public_ip]
+  name            = local.www_domain
+  type            = "A"
+  ttl             = 300
+  records         = [aws_eip.overmind.public_ip]
 }
 
 resource "aws_iam_openid_connect_provider" "github" {

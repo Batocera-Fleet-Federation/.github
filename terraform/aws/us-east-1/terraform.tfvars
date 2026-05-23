@@ -18,6 +18,50 @@ certificate_sans = [
 ]
 create_acm_validation_records = true
 
+route53_mail_records = {
+  purelymail_apex_txt = {
+    name = ""
+    type = "TXT"
+    records = [
+      "purelymail_ownership_proof=16b98f59488ec1c14895b8509f291927d6a631945e296524cc0b8a564117dfe9593c0d927d302bdf73400604b7c1f52e033e43536c11c5041bc510181cd315f0",
+      "v=spf1 include:_spf.purelymail.com ~all",
+    ]
+  }
+  purelymail_mx = {
+    name    = ""
+    type    = "MX"
+    records = ["10 mailserver.purelymail.com."]
+  }
+  purelymail_dkim_1 = {
+    name    = "purelymail1._domainkey"
+    type    = "CNAME"
+    records = ["key1.dkimroot.purelymail.com."]
+  }
+  purelymail_dkim_2 = {
+    name    = "purelymail2._domainkey"
+    type    = "CNAME"
+    records = ["key2.dkimroot.purelymail.com."]
+  }
+  purelymail_dkim_3 = {
+    name    = "purelymail3._domainkey"
+    type    = "CNAME"
+    records = ["key3.dkimroot.purelymail.com."]
+  }
+  purelymail_dmarc = {
+    name    = "_dmarc"
+    type    = "CNAME"
+    records = ["dmarcroot.purelymail.com."]
+  }
+}
+
+email_provider     = "smtp"
+email_from_address = "no-reply@batocera-swarm.com"
+smtp_host          = "smtp.purelymail.com"
+smtp_port          = 587
+smtp_username      = "no-reply@batocera-swarm.com"
+smtp_password      = ""
+smtp_starttls      = true
+
 ecr_repository_name = "batocera-overmind"
 instance_type       = "t3.micro"
 db_instance_class   = "db.t3.micro"

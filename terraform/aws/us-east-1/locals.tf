@@ -1,6 +1,6 @@
 locals {
   image_version = "latest"
-  image = "${aws_ecr_repository.overmind.repository_url}:${local.image_version}"
+  image         = "${aws_ecr_repository.overmind.repository_url}:${local.image_version}"
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     aws_region              = var.aws_region
     ecr_repository_url      = aws_ecr_repository.overmind.repository_url
@@ -11,8 +11,6 @@ locals {
     internal_ca_secret_id   = var.enable_internal_ca_secret ? aws_secretsmanager_secret.internal_ca[0].arn : ""
     overmind_container_port = var.overmind_container_port
     environment             = var.environment
-    aws_ses_from_address    = "no-reply@${trimsuffix(var.domain_name, ".")}"
-    email_provider          = "ses"
     use_fake_data           = var.use_fake_data
   })
 }
@@ -29,4 +27,5 @@ locals {
     [local.www_domain, local.overmind_fqdn == local.root_domain ? "" : local.overmind_fqdn],
     var.certificate_sans
   )))
+  email_from_address = var.email_from_address == "" ? "no-reply@${local.root_domain}" : var.email_from_address
 }
