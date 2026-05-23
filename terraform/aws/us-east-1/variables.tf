@@ -260,3 +260,16 @@ variable "smtp_starttls" {
   type        = bool
   default     = true
 }
+
+variable "runtime_secret_refresh_seconds" {
+  description = "How often Overmind polls the runtime secret for updated ENV values."
+  type        = number
+  default     = 60
+}
+
+variable "runtime_secret_extra_env" {
+  description = "Additional arbitrary runtime environment key/value pairs to merge into the existing Overmind runtime secret."
+  type        = map(string)
+  default     = {}
+  sensitive   = true
+}

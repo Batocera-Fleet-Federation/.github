@@ -239,22 +239,24 @@ resource "aws_secretsmanager_secret" "overmind_runtime" {
 
 resource "aws_secretsmanager_secret_version" "overmind_runtime" {
   secret_id = aws_secretsmanager_secret.overmind_runtime.id
-  secret_string = jsonencode({
-    OVERMIND_POSTGRES_HOST     = aws_db_instance.overmind.address
-    OVERMIND_POSTGRES_PORT     = tostring(aws_db_instance.overmind.port)
-    OVERMIND_POSTGRES_DB       = var.db_name
-    OVERMIND_POSTGRES_USER     = var.db_username
-    OVERMIND_POSTGRES_PASSWORD = random_password.db_password.result
-    SECRET_KEY                 = random_password.secret_key.result
-    AWS_REGION                 = var.aws_region
-    EMAIL_PROVIDER             = var.email_provider
-    EMAIL_FROM                 = local.email_from_address
-    SMTP_HOST                  = var.smtp_host
-    SMTP_PORT                  = tostring(var.smtp_port)
-    SMTP_USERNAME              = var.smtp_username
-    SMTP_PASSWORD              = var.smtp_password
-    SMTP_STARTTLS              = tostring(var.smtp_starttls)
-  })
+  secret_string = jsonencode(merge({
+    OVERMIND_POSTGRES_HOST          = aws_db_instance.overmind.address
+    OVERMIND_POSTGRES_PORT          = tostring(aws_db_instance.overmind.port)
+    OVERMIND_POSTGRES_DB            = var.db_name
+    OVERMIND_POSTGRES_USER          = var.db_username
+    OVERMIND_POSTGRES_PASSWORD      = random_password.db_password.result
+    SECRET_KEY                      = random_password.secret_key.result
+    AWS_REGION                      = var.aws_region
+    EMAIL_PROVIDER                  = var.email_provider
+    EMAIL_FROM                      = local.email_from_address
+    SMTP_HOST                       = var.smtp_host
+    SMTP_PORT                       = tostring(var.smtp_port)
+    SMTP_USERNAME                   = var.smtp_username
+    SMTP_PASSWORD                   = var.smtp_password
+    SMTP_STARTTLS                   = tostring(var.smtp_starttls)
+    OVERMIND_RUNTIME_SECRET_NAME    = aws_secretsmanager_secret.overmind_runtime.name
+    OVERMIND_SECRET_REFRESH_SECONDS = tostring(var.runtime_secret_refresh_seconds)
+  }, var.runtime_secret_extra_env))
 }
 
 resource "tls_private_key" "internal_ca" {

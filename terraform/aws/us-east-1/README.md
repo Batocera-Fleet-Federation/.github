@@ -226,6 +226,22 @@ Overmind sends production email through SMTP when `EMAIL_PROVIDER=smtp`. DNS and
 1. Keep the Purelymail TXT, MX, DKIM, SPF, and DMARC records in `route53_mail_records`.
 2. Set `email_from_address`, `smtp_username`, and `smtp_password` for the Purelymail mailbox.
 3. Terraform stores the SMTP runtime settings in Secrets Manager and the EC2 deployment loads them into the container environment.
+4. Optional sender branding is controlled by `EMAIL_FROM_DISPLAY_NAME`; when set, outbound mail uses `Display Name <email@domain.com>`.
+
+**Runtime override secret (`overmind`):**
+Terraform creates an AWS Secrets Manager secret named `overmind` but does not create a secret version or commit secret values. Operators can manage runtime overrides manually:
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id overmind \
+  --secret-string '{
+    "SMTP_USERNAME": "admin@theoutlawoasis.com",
+    "SMTP_PASSWORD": "secret-value",
+    "EMAIL_FROM": "noreply@theoutlawoasis.com",
+    "EMAIL_FROM_DISPLAY_NAME": "Batocera Overmind"
+  }'
+```
+
+The EC2 instance role can read only the generated deployment secret, the optional internal CA secret, and the `overmind` override secret. Every key in the `overmind` JSON object is applied as an environment variable override inside the app. Secret values override container env values and are never logged. Overmind polls the secret every `runtime_secret_refresh_seconds` seconds, applies changed values without restarting for runtime-read settings such as SMTP/email configuration, and keeps the last known good values if refresh fails. Settings captured by long-lived library state may still require a restart; `SECRET_KEY` and `TOKEN_HASH_SECRET` are explicitly refreshed in the app.
 
 **RDS burstable instance:**
 `db.t3.micro` is appropriate for development. For production traffic, upgrade to `db.t3.small` or `db.t3.medium` and set `db_deletion_protection = true`.
