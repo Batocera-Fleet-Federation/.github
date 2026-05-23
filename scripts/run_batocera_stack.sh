@@ -3,6 +3,19 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+ENV_LOCAL_FILE="${ENV_LOCAL_FILE:-$SCRIPT_DIR/.env.local}"
+
+if [[ -f "$ENV_LOCAL_FILE" ]]; then
+  echo "Sourcing local environment file: $ENV_LOCAL_FILE"
+  # Export all variables loaded from .env.local so child Python apps inherit them.
+  set -a
+  # shellcheck source=/dev/null
+  source "$ENV_LOCAL_FILE"
+  set +a
+else
+  echo "No local environment file found at: $ENV_LOCAL_FILE"
+fi
+
 OVERMIND_DIR="$ROOT_DIR/batocera.overmind"
 DRONE_DIR="$ROOT_DIR/batocera.drone"
 OVERMIND_PYTHON_BIN="$OVERMIND_DIR/.venv/bin/python"

@@ -111,3 +111,6 @@ data/roms/**
 *.tfstate.lock.info
 *.tfstate.backup
 *.tfstate
+
+# Ignore local environment files
+*.env.local
