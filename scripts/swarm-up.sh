@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/.github/docker/docker-compose.swarm.yml"
+SWARM_ENV_SOURCE="$ROOT_DIR/.github/scripts/.env.swarm"
 ROM_ROOT="$ROOT_DIR/.github/data/roms"
 IMPORT_SCRIPT="$ROOT_DIR/.github/scripts/import-batocera-test-data.sh"
 GENERATE_SWARM_DATA_SCRIPT="$ROOT_DIR/.github/scripts/generate-swarm-rom-data.py"
@@ -14,6 +15,7 @@ SWARM_DATA_SEED=""
 MIN_ROMS_PER_SYSTEM="1"
 MAX_ROMS_PER_SYSTEM="4"
 DRONE_COUNT="4"
+NORMALIZED_SWARM_ENV_FILE=""
 
 URLS=(
   "https://bff-overmind:8000"
@@ -37,6 +39,38 @@ Options:
   --drone-count VALUE
   --help, -h       Show this help.
 EOF
+}
+
+cleanup() {
+  if [[ -n "$NORMALIZED_SWARM_ENV_FILE" ]]; then
+    rm -f "$NORMALIZED_SWARM_ENV_FILE"
+  fi
+}
+
+trap cleanup EXIT
+
+load_swarm_env() {
+  if [[ ! -f "$SWARM_ENV_SOURCE" ]]; then
+    echo "No .env.swarm found at $SWARM_ENV_SOURCE; using shell environment and compose defaults."
+    return 0
+  fi
+
+  echo "Loading swarm environment from $SWARM_ENV_SOURCE"
+  set -a
+  # shellcheck disable=SC1090
+  source "$SWARM_ENV_SOURCE"
+  set +a
+
+  NORMALIZED_SWARM_ENV_FILE="$(mktemp)"
+  while IFS= read -r key; do
+    [[ -z "$key" ]] && continue
+    printf '%s=%s\n' "$key" "${!key}" >> "$NORMALIZED_SWARM_ENV_FILE"
+  done < <(
+    sed -nE 's/^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=.*/\2/p' "$SWARM_ENV_SOURCE" \
+      | sort -u
+  )
+
+  export SWARM_CONTAINER_ENV_FILE="$NORMALIZED_SWARM_ENV_FILE"
 }
 
 update_hosts_from_urls() {
@@ -282,6 +316,7 @@ main() {
   fi
 
   validate_roms_exist
+  load_swarm_env
   generate_swarm_rom_data
   provision_swarm_mtls_certs
   update_hosts_from_urls

@@ -34,6 +34,8 @@ x-drone-common: &drone-common
       condition: service_healthy
   environment:
     <<: *drone-env
+  env_file:
+    - ${SWARM_CONTAINER_ENV_FILE:-../scripts/.env.swarm}
   volumes:
     - ../data:/batocera-test-data:ro
   deploy:
@@ -47,6 +49,8 @@ services:
     image: ghcr.io/batocera-fleet-federation/batocera-overmind:local
     build:
       context: ../../batocera.overmind
+    env_file:
+      - ${SWARM_CONTAINER_ENV_FILE:-../scripts/.env.swarm}
     environment:
       USE_FAKE_DATA: "${USE_FAKE_DATA:-false}"
       SWARM_OFFLINE_THRESHOLD_SECONDS: "180"
