@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/.github/docker/docker-compose.swarm.yml"
 SWARM_ENV_SOURCE="$ROOT_DIR/.github/scripts/.env.swarm"
 ROM_ROOT="$ROOT_DIR/.github/data/roms"
+BIOS_ROOT="$ROOT_DIR/.github/data/bios"
 IMPORT_SCRIPT="$ROOT_DIR/.github/scripts/import-batocera-test-data.sh"
 GENERATE_SWARM_DATA_SCRIPT="$ROOT_DIR/.github/scripts/generate-swarm-rom-data.py"
 PROVISION_MTLS_SCRIPT="$ROOT_DIR/.github/scripts/provision-local-mtls-certs.sh"
@@ -14,6 +15,8 @@ RESET_DATA="false"
 SWARM_DATA_SEED=""
 MIN_ROMS_PER_SYSTEM="1"
 MAX_ROMS_PER_SYSTEM="4"
+MIN_BIOS_FILES="1"
+MAX_BIOS_FILES="4"
 DRONE_COUNT="4"
 NORMALIZED_SWARM_ENV_FILE=""
 
@@ -36,6 +39,8 @@ Options:
   --seed VALUE     Use deterministic randomized per-Drone ROM layout.
   --min-roms-per-system VALUE
   --max-roms-per-system VALUE
+  --min-bios-files VALUE
+  --max-bios-files VALUE
   --drone-count VALUE
   --help, -h       Show this help.
 EOF
@@ -252,10 +257,13 @@ generate_swarm_rom_data() {
   fi
   local args=(
     "--source" "$ROM_ROOT"
+    "--bios-source" "$BIOS_ROOT"
     "--output" "$ROOT_DIR/.github/generated"
     "--drone-count" "$DRONE_COUNT"
     "--min-roms-per-system" "$MIN_ROMS_PER_SYSTEM"
     "--max-roms-per-system" "$MAX_ROMS_PER_SYSTEM"
+    "--min-bios-files" "$MIN_BIOS_FILES"
+    "--max-bios-files" "$MAX_BIOS_FILES"
   )
   if [[ "$RESET_DATA" == "true" ]]; then
     args+=("--reset")
@@ -263,7 +271,7 @@ generate_swarm_rom_data() {
   if [[ -n "$SWARM_DATA_SEED" ]]; then
     args+=("--seed" "$SWARM_DATA_SEED")
   fi
-  echo "Generating per-Drone randomized ROM data..."
+  echo "Generating per-Drone randomized ROM and BIOS data..."
   python3 "$GENERATE_SWARM_DATA_SCRIPT" "${args[@]}"
 }
 
@@ -289,6 +297,14 @@ main() {
         ;;
       --max-roms-per-system)
         MAX_ROMS_PER_SYSTEM="${2:-4}"
+        shift 2
+        ;;
+      --min-bios-files)
+        MIN_BIOS_FILES="${2:-1}"
+        shift 2
+        ;;
+      --max-bios-files)
+        MAX_BIOS_FILES="${2:-4}"
         shift 2
         ;;
       --drone-count)

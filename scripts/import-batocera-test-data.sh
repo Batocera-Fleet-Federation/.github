@@ -190,6 +190,168 @@ create_bios() {
   fi
 }
 
+prepare_remote_gamelist_artwork_import() {
+  local system="$1"
+  local selected_roms_file="$2"
+  local remote_gamelist="$3"
+  local local_gamelist="$4"
+  local artwork_files="$5"
+  local merged_gamelist="$6"
+
+  python3 - "$system" "$selected_roms_file" "$remote_gamelist" "$local_gamelist" "$artwork_files" "$merged_gamelist" <<'PY'
+import copy
+import os
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import PurePosixPath
+from urllib.parse import unquote, urlparse
+
+
+ARTWORK_FIELDS = ("image", "thumbnail", "marquee", "fanart", "boxart", "video", "wheel", "manual")
+
+
+system, selected_roms_file, remote_gamelist, local_gamelist, artwork_files, merged_gamelist = sys.argv[1:]
+
+
+def normalize_gamelist_path(value: str) -> str:
+    raw = str(value or "").strip().replace("\\", "/")
+    while raw.startswith("./"):
+        raw = raw[2:]
+    return raw.lstrip("/")
+
+
+def load_root(path: str) -> ET.Element:
+    if not path or not os.path.exists(path) or os.path.getsize(path) == 0:
+        return ET.Element("gameList")
+    try:
+        root = ET.parse(path).getroot()
+    except ET.ParseError:
+        return ET.Element("gameList")
+    return root if root.tag == "gameList" else ET.Element("gameList")
+
+
+def child_text(parent: ET.Element, tag: str) -> str:
+    child = parent.find(tag)
+    return (child.text or "").strip() if child is not None else ""
+
+
+def set_child_text(parent: ET.Element, tag: str, value: str) -> None:
+    child = parent.find(tag)
+    if child is None:
+        child = ET.SubElement(parent, tag)
+    child.text = value
+
+
+def remove_child(parent: ET.Element, tag: str) -> None:
+    child = parent.find(tag)
+    if child is not None:
+        parent.remove(child)
+
+
+def remote_artwork_to_system_relative(value: str) -> str:
+    raw = str(value or "").strip().replace("\\", "/")
+    if not raw:
+        return ""
+    parsed = urlparse(raw)
+    if parsed.scheme and parsed.scheme.lower() not in {"file"}:
+        return ""
+    if parsed.scheme.lower() == "file":
+        raw = unquote(parsed.path)
+    while raw.startswith("./"):
+        raw = raw[2:]
+    userdata_prefix = f"/userdata/roms/{system}/"
+    roms_prefix = f"/roms/{system}/"
+    if raw.startswith(userdata_prefix):
+        raw = raw[len(userdata_prefix):]
+    elif raw.startswith(roms_prefix):
+        raw = raw[len(roms_prefix):]
+    elif raw.startswith("/"):
+        return ""
+    normalized = os.path.normpath(raw).replace("\\", "/")
+    if normalized in {"", "."} or normalized.startswith("../") or normalized == "..":
+        return ""
+    return PurePosixPath(normalized).as_posix()
+
+
+with open(selected_roms_file, "r", encoding="utf-8", errors="replace") as handle:
+    selected = {normalize_gamelist_path(line) for line in handle.read().splitlines() if line.strip()}
+
+local_root = load_root(local_gamelist)
+remote_root = load_root(remote_gamelist)
+entries_by_path = {}
+
+for game in local_root.findall("game"):
+    path = normalize_gamelist_path(child_text(game, "path"))
+    if path:
+        entries_by_path[path] = copy.deepcopy(game)
+
+artwork = []
+seen_artwork = set()
+for game in remote_root.findall("game"):
+    rom_path = normalize_gamelist_path(child_text(game, "path"))
+    if rom_path not in selected:
+        continue
+    merged_game = copy.deepcopy(game)
+    set_child_text(merged_game, "path", f"./{rom_path}")
+    for field in ARTWORK_FIELDS:
+        value = child_text(merged_game, field)
+        if not value:
+            continue
+        relative = remote_artwork_to_system_relative(value)
+        if not relative:
+            remove_child(merged_game, field)
+            continue
+        set_child_text(merged_game, field, f"./{relative}")
+        if relative not in seen_artwork:
+            artwork.append(relative)
+            seen_artwork.add(relative)
+    entries_by_path[rom_path] = merged_game
+
+new_root = ET.Element("gameList")
+for path in sorted(entries_by_path, key=str.lower):
+    new_root.append(entries_by_path[path])
+
+tree = ET.ElementTree(new_root)
+try:
+    ET.indent(tree, space="  ")
+except AttributeError:
+    pass
+tree.write(merged_gamelist, encoding="utf-8", xml_declaration=True)
+
+with open(artwork_files, "w", encoding="utf-8") as handle:
+    for item in artwork:
+        handle.write(f"{item}\n")
+PY
+}
+
+sample_file_list() {
+  local source_file="$1"
+  local max_files="$2"
+
+  python3 - "$source_file" "$max_files" <<'PY'
+import random
+import sys
+
+source_file, max_files = sys.argv[1:]
+try:
+    limit = max(0, int(max_files))
+except ValueError:
+    limit = 0
+
+if limit <= 0:
+    raise SystemExit(0)
+
+with open(source_file, "r", encoding="utf-8", errors="replace") as handle:
+    files = [line.rstrip("\n") for line in handle if line.strip()]
+
+if len(files) > limit:
+    files = random.sample(files, limit)
+
+for item in sorted(files, key=str.lower):
+    print(item)
+PY
+}
+
 create_rom "snes" "Chrono Trigger (USA).zip" "Chrono Trigger"
 create_rom "snes" "Super Metroid (USA).zip" "Super Metroid"
 create_rom "snes" "EarthBound (USA).zip" "EarthBound"
@@ -238,8 +400,11 @@ if [[ -n "$REMOTE_PASS" && "$GENERATE_ONLY" != "true" ]]; then
   )
 
   tmp_files="$(mktemp)"
+  tmp_gamelist="$(mktemp)"
+  tmp_artwork_files="$(mktemp)"
+  tmp_merged_gamelist="$(mktemp)"
   cleanup() {
-    rm -f "$tmp_files"
+    rm -f "$tmp_files" "$tmp_gamelist" "$tmp_artwork_files" "$tmp_merged_gamelist"
   }
   trap cleanup EXIT
 
@@ -279,6 +444,19 @@ EOF
     if [[ -s "$tmp_files" ]]; then
       echo "  ${system}: importing $(wc -l < "$tmp_files" | tr -d ' ') file(s)"
       sshpass -p "$REMOTE_PASS" rsync -av --files-from="$tmp_files" -e "ssh ${SSH_OPTS[*]}" "${REMOTE_HOST}:${remote_dir}/" "${local_dir}/"
+      : > "$tmp_gamelist"
+      : > "$tmp_artwork_files"
+      : > "$tmp_merged_gamelist"
+      if sshpass -p "$REMOTE_PASS" rsync -a -e "ssh ${SSH_OPTS[*]}" "${REMOTE_HOST}:${remote_dir}/gamelist.xml" "$tmp_gamelist" >/dev/null 2>&1; then
+        prepare_remote_gamelist_artwork_import "$system" "$tmp_files" "$tmp_gamelist" "$local_dir/gamelist.xml" "$tmp_artwork_files" "$tmp_merged_gamelist"
+        if [[ -s "$tmp_artwork_files" ]]; then
+          echo "  ${system}: importing $(wc -l < "$tmp_artwork_files" | tr -d ' ') artwork file(s)"
+          sshpass -p "$REMOTE_PASS" rsync -av --files-from="$tmp_artwork_files" -e "ssh ${SSH_OPTS[*]}" "${REMOTE_HOST}:${remote_dir}/" "${local_dir}/"
+        fi
+        mv "$tmp_merged_gamelist" "$local_dir/gamelist.xml"
+      else
+        echo "  ${system}: no remote gamelist.xml found; skipped artwork import"
+      fi
     fi
   done
 
@@ -287,8 +465,11 @@ EOF
   sshpass -p "$REMOTE_PASS" ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" "
     if [ ! -d '$REMOTE_BIOS_BASE' ]; then exit 0; fi
     cd '$REMOTE_BIOS_BASE' || exit 0
-    find . -type f -size -${MAX_BIOS_SIZE_KB}k | sort | head -n ${MAX_BIOS_FILES} | sed 's#^\./##'
+    find . -type f -size -${MAX_BIOS_SIZE_KB}k | sort | sed 's#^\./##'
   " </dev/null > "$tmp_files"
+  sampled_bios_files="$(mktemp)"
+  sample_file_list "$tmp_files" "$MAX_BIOS_FILES" > "$sampled_bios_files"
+  mv "$sampled_bios_files" "$tmp_files"
   if [[ -s "$tmp_files" ]]; then
     echo "  bios: importing $(wc -l < "$tmp_files" | tr -d ' ') file(s)"
     sshpass -p "$REMOTE_PASS" rsync -av --files-from="$tmp_files" -e "ssh ${SSH_OPTS[*]}" "${REMOTE_HOST}:${REMOTE_BIOS_BASE}/" "${LOCAL_BIOS_BASE}/"
