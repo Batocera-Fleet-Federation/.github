@@ -390,6 +390,7 @@ echo "Starting Batocera Overmind on https://localhost:${OVERMIND_PORT}"
   PYTHONPATH="$OVERMIND_DIR/src" \
   USE_FAKE_DATA="${USE_FAKE_DATA:-false}" \
   OVERMIND_PORT="$OVERMIND_PORT" \
+  OVERMIND_VERSION="${OVERMIND_VERSION:-local:console}" \
   EMAIL_PROVIDER="${EMAIL_PROVIDER:-}" \
   EMAIL_FROM="${EMAIL_FROM:-}" \
   SMTP_HOST="${SMTP_HOST:-}" \

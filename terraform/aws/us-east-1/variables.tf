@@ -16,6 +16,12 @@ variable "environment" {
   default     = "prod"
 }
 
+variable "overmind_version" {
+  description = "Display version label provided to the Overmind container navbar."
+  type        = string
+  default     = ""
+}
+
 variable "domain_name" {
   description = "Root domain hosted for Batocera Swarm."
   type        = string

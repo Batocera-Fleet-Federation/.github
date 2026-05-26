@@ -54,6 +54,7 @@ services:
     environment:
       USE_FAKE_DATA: "${USE_FAKE_DATA:-false}"
       SWARM_OFFLINE_THRESHOLD_SECONDS: "180"
+      OVERMIND_VERSION: "${OVERMIND_VERSION:-}"
     ports:
       - "${OVERMIND_PORT:-8000}:8000"
     networks:

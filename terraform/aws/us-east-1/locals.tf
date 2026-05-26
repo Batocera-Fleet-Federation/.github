@@ -11,6 +11,7 @@ locals {
     internal_ca_secret_id   = var.enable_internal_ca_secret ? aws_secretsmanager_secret.internal_ca[0].arn : ""
     overmind_container_port = var.overmind_container_port
     environment             = var.environment
+    overmind_version        = var.overmind_version
     use_fake_data           = var.use_fake_data
   })
 }
