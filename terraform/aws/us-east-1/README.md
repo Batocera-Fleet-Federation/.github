@@ -221,27 +221,37 @@ After Terraform and DNS:
 
 ## Known Limitations & Next Steps
 
-**Email verification (Purelymail SMTP):**
-Overmind sends production email through SMTP when `EMAIL_PROVIDER=smtp`. DNS and SMTP settings are driven from `terraform.tfvars`:
-1. Keep the Purelymail TXT, MX, DKIM, SPF, and DMARC records in `route53_mail_records`.
-2. Set `email_from_address`, `smtp_username`, and `smtp_password` for the Purelymail mailbox.
-3. Terraform stores the SMTP runtime settings in Secrets Manager and the EC2 deployment loads them into the container environment.
-4. Optional sender branding is controlled by `EMAIL_FROM_DISPLAY_NAME`; when set, outbound mail uses `Display Name <email@domain.com>`.
+**Email verification and OAuth credentials:**
+Overmind sends production email through SMTP when `EMAIL_PROVIDER=smtp`. The runtime environment is stored in the single secret `bff-overmind/prod/runtime` by default (`${project_name}/${environment}/runtime`).
 
-**Runtime override secret (`overmind`):**
-Terraform creates an AWS Secrets Manager secret named `overmind` but does not create a secret version or commit secret values. Operators can manage runtime overrides manually:
+1. Keep the Purelymail TXT, MX, DKIM, SPF, and DMARC records in `route53_mail_records`.
+2. Set `email_from_address` and `smtp_username` for the Purelymail mailbox in `terraform.tfvars`.
+3. Store `SMTP_PASSWORD`, Google OAuth credentials, and GitHub OAuth credentials directly in `bff-overmind/prod/runtime`.
+
+**Operator-managed runtime secret (`bff-overmind/prod/runtime`):**
+Terraform creates this secret and seeds its initial payload for a new environment. After creation, its secret payload is operator-managed: Terraform ignores `secret_string` and secret-stage changes and prevents destruction of the runtime secret and its managed initial version. This protects hand-managed SMTP and OAuth values from being erased during `terraform apply`.
+
+When adding or changing credentials, preserve every existing key in the JSON object, including database settings and `SECRET_KEY`. For example, retrieve the existing value, edit it locally with secure permissions, then write the complete updated object back:
 ```bash
+umask 077
+aws secretsmanager get-secret-value \
+  --secret-id bff-overmind/prod/runtime \
+  --query SecretString \
+  --output text > /tmp/overmind-runtime.json
+
+# Edit /tmp/overmind-runtime.json, retaining existing keys and adding:
+# SMTP_PASSWORD, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+# GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, EMAIL_FROM_DISPLAY_NAME
+
 aws secretsmanager put-secret-value \
-  --secret-id overmind \
-  --secret-string '{
-    "SMTP_USERNAME": "admin@theoutlawoasis.com",
-    "SMTP_PASSWORD": "secret-value",
-    "EMAIL_FROM": "noreply@theoutlawoasis.com",
-    "EMAIL_FROM_DISPLAY_NAME": "Batocera Overmind"
-  }'
+  --secret-id bff-overmind/prod/runtime \
+  --secret-string file:///tmp/overmind-runtime.json
+rm -f /tmp/overmind-runtime.json
 ```
 
-The EC2 instance role can read only the generated deployment secret, the optional internal CA secret, and the `overmind` override secret. Every key in the `overmind` JSON object is applied as an environment variable override inside the app. Secret values override container env values and are never logged. Overmind polls the secret every `runtime_secret_refresh_seconds` seconds, applies changed values without restarting for runtime-read settings such as SMTP/email configuration, and keeps the last known good values if refresh fails. Settings captured by long-lived library state may still require a restart; `SECRET_KEY` and `TOKEN_HASH_SECRET` are explicitly refreshed in the app.
+Every key in this JSON object is loaded into the container environment and also applied as a runtime override inside the app. Values are never logged. Overmind polls the same secret every `runtime_secret_refresh_seconds` seconds, applies changed runtime-read settings such as SMTP/email configuration, and keeps the last known good values if refresh fails. OAuth availability is also read from environment variables; changes are best confirmed after a container restart.
+
+Because Terraform no longer updates the existing secret payload, changes to Terraform inputs represented in that JSON object, including regenerated database credentials, must also be applied deliberately to the secret during maintenance.
 
 **RDS burstable instance:**
 `db.t3.micro` is appropriate for development. For production traffic, upgrade to `db.t3.small` or `db.t3.medium` and set `db_deletion_protection = true`.

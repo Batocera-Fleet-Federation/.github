@@ -235,6 +235,10 @@ resource "aws_db_instance" "overmind" {
 resource "aws_secretsmanager_secret" "overmind_runtime" {
   name                    = "${var.project_name}/${var.environment}/runtime"
   recovery_window_in_days = 0
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "overmind_runtime" {
@@ -252,11 +256,15 @@ resource "aws_secretsmanager_secret_version" "overmind_runtime" {
     SMTP_HOST                       = var.smtp_host
     SMTP_PORT                       = tostring(var.smtp_port)
     SMTP_USERNAME                   = var.smtp_username
-    SMTP_PASSWORD                   = var.smtp_password
     SMTP_STARTTLS                   = tostring(var.smtp_starttls)
     OVERMIND_RUNTIME_SECRET_NAME    = aws_secretsmanager_secret.overmind_runtime.name
     OVERMIND_SECRET_REFRESH_SECONDS = tostring(var.runtime_secret_refresh_seconds)
   }, var.runtime_secret_extra_env))
+
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes  = [secret_string, version_stages]
+  }
 }
 
 resource "tls_private_key" "internal_ca" {

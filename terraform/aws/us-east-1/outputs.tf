@@ -69,7 +69,7 @@ output "rds_endpoint" {
 }
 
 output "runtime_secret_arn" {
-  description = "Secrets Manager ARN containing runtime database credentials and SECRET_KEY."
+  description = "Runtime secret ARN. Terraform creates it once and preserves its operator-managed payload on later applies."
   value       = aws_secretsmanager_secret.overmind_runtime.arn
 }
 

@@ -254,13 +254,6 @@ variable "smtp_username" {
   sensitive   = true
 }
 
-variable "smtp_password" {
-  description = "SMTP password."
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
 variable "smtp_starttls" {
   description = "Use STARTTLS for SMTP."
   type        = bool
@@ -274,7 +267,7 @@ variable "runtime_secret_refresh_seconds" {
 }
 
 variable "runtime_secret_extra_env" {
-  description = "Additional arbitrary runtime environment key/value pairs to merge into the existing Overmind runtime secret."
+  description = "Additional initial runtime secret values for a new environment. Once created, bff-overmind/environment/runtime is operator-managed and Terraform ignores payload changes."
   type        = map(string)
   default     = {}
   sensitive   = true

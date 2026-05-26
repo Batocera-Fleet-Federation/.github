@@ -60,8 +60,11 @@ email_from_address = "no-reply@batocera-swarm.com"
 smtp_host          = "smtp.purelymail.com"
 smtp_port          = 587
 smtp_username      = "no-reply@batocera-swarm.com"
-smtp_password      = ""
 smtp_starttls      = true
+
+# After Terraform initially creates bff-overmind/prod/runtime, manage SMTP_PASSWORD,
+# GOOGLE_CLIENT_ID/SECRET, and GITHUB_CLIENT_ID/SECRET directly in that secret.
+# Terraform is configured to preserve its existing payload on later applies.
 
 ecr_repository_name = "batocera-overmind"
 instance_type       = "t3.micro"
