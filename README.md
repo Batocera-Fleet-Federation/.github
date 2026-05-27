@@ -107,6 +107,16 @@ To collect a larger window:
 SINCE=6h .github/scripts/debug-overmind-lambda.sh
 ```
 
+To test authenticated requests across Lambda tiers, provide a disposable or known-good account:
+
+```bash
+DEBUG_AUTH_EMAIL=user@example.com \
+DEBUG_AUTH_PASSWORD='...' \
+.github/scripts/debug-overmind-lambda.sh
+```
+
+The authenticated probe logs in once, redacts the token, then calls `/api/auth/refresh`, `/api/profile`, `/api/swarms`, `/api/devices`, and `/api/notifications` with the same bearer token.
+
 ## Onboarding
 
 The default swarm starts Drones as real unapproved devices. They know the Overmind URL, submit a pending request, and show up in Overmind as **Psionic connection detected**. The Overlord approves them from the Drones page.
