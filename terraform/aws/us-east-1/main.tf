@@ -5,22 +5,6 @@ data "aws_availability_zones" "available" {
 
 data "aws_caller_identity" "current" {}
 
-data "aws_ami" "amazon_linux_2023" {
-  count       = var.ami_id == "" ? 1 : 0
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["al2023-ami-*-x86_64"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
 data "aws_route53_zone" "selected" {
   count        = var.create_hosted_zone || var.hosted_zone_id != "" ? 0 : 1
   name         = var.hosted_zone_name
@@ -179,19 +163,15 @@ resource "aws_security_group" "db" {
   description = "PostgreSQL only from Overmind app"
   vpc_id      = aws_vpc.overmind.id
 
-  ingress {
-    description     = "PostgreSQL from app"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.app.id]
-  }
-
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  lifecycle {
+    ignore_changes = [ingress]
   }
 }
 
@@ -210,7 +190,7 @@ resource "aws_security_group" "lambda" {
 }
 
 resource "aws_security_group" "rds_proxy" {
-  count       = local.lambda_enabled ? 1 : 0
+  count       = local.rds_proxy_enabled ? 1 : 0
   name        = "${var.project_name}-${var.environment}-rds-proxy"
   description = "RDS Proxy access from Overmind Lambda functions"
   vpc_id      = aws_vpc.overmind.id
@@ -232,7 +212,7 @@ resource "aws_security_group" "rds_proxy" {
 }
 
 resource "aws_security_group_rule" "db_from_rds_proxy" {
-  count                    = local.lambda_enabled ? 1 : 0
+  count                    = local.rds_proxy_enabled ? 1 : 0
   type                     = "ingress"
   description              = "PostgreSQL from RDS Proxy"
   from_port                = 5432
@@ -240,6 +220,17 @@ resource "aws_security_group_rule" "db_from_rds_proxy" {
   protocol                 = "tcp"
   security_group_id        = aws_security_group.db.id
   source_security_group_id = aws_security_group.rds_proxy[0].id
+}
+
+resource "aws_security_group_rule" "db_from_lambda_direct" {
+  count                    = local.lambda_enabled && !var.enable_rds_proxy ? 1 : 0
+  type                     = "ingress"
+  description              = "PostgreSQL directly from Lambda when RDS Proxy is disabled"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.db.id
+  source_security_group_id = aws_security_group.lambda[0].id
 }
 
 resource "aws_security_group" "vpc_endpoints" {
@@ -312,13 +303,13 @@ resource "aws_vpc_endpoint" "secretsmanager" {
 }
 
 resource "aws_secretsmanager_secret" "db_credentials" {
-  count                   = local.lambda_enabled ? 1 : 0
+  count                   = local.rds_proxy_enabled ? 1 : 0
   name                    = "${var.project_name}/${var.environment}/db-credentials"
   recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "db_credentials" {
-  count     = local.lambda_enabled ? 1 : 0
+  count     = local.rds_proxy_enabled ? 1 : 0
   secret_id = aws_secretsmanager_secret.db_credentials[0].id
   secret_string = jsonencode({
     username = var.db_username
@@ -327,7 +318,7 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
 }
 
 resource "aws_iam_role" "rds_proxy" {
-  count = local.lambda_enabled ? 1 : 0
+  count = local.rds_proxy_enabled ? 1 : 0
   name  = "${var.project_name}-${var.environment}-rds-proxy"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -340,7 +331,7 @@ resource "aws_iam_role" "rds_proxy" {
 }
 
 resource "aws_iam_role_policy" "rds_proxy" {
-  count = local.lambda_enabled ? 1 : 0
+  count = local.rds_proxy_enabled ? 1 : 0
   name  = "${var.project_name}-${var.environment}-rds-proxy"
   role  = aws_iam_role.rds_proxy[0].id
   policy = jsonencode({
@@ -354,7 +345,7 @@ resource "aws_iam_role_policy" "rds_proxy" {
 }
 
 resource "aws_db_proxy" "overmind" {
-  count                  = local.lambda_enabled ? 1 : 0
+  count                  = local.rds_proxy_enabled ? 1 : 0
   name                   = "${var.project_name}-${var.environment}"
   debug_logging          = false
   engine_family          = "POSTGRESQL"
@@ -372,7 +363,7 @@ resource "aws_db_proxy" "overmind" {
 }
 
 resource "aws_db_proxy_default_target_group" "overmind" {
-  count         = local.lambda_enabled ? 1 : 0
+  count         = local.rds_proxy_enabled ? 1 : 0
   db_proxy_name = aws_db_proxy.overmind[0].name
 
   connection_pool_config {
@@ -383,7 +374,7 @@ resource "aws_db_proxy_default_target_group" "overmind" {
 }
 
 resource "aws_db_proxy_target" "overmind" {
-  count                  = local.lambda_enabled ? 1 : 0
+  count                  = local.rds_proxy_enabled ? 1 : 0
   db_instance_identifier = aws_db_instance.overmind.identifier
   db_proxy_name          = aws_db_proxy.overmind[0].name
   target_group_name      = aws_db_proxy_default_target_group.overmind[0].name
@@ -459,118 +450,60 @@ resource "aws_secretsmanager_secret_version" "internal_ca" {
   })
 }
 
-resource "aws_iam_role" "instance" {
-  name = "${var.project_name}-${var.environment}-instance"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "ec2.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "ssm" {
-  role       = aws_iam_role.instance.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-resource "aws_iam_role_policy" "instance" {
-  name = "${var.project_name}-${var.environment}-runtime"
-  role = aws_iam_role.instance.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "ecr:GetAuthorizationToken",
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = compact([aws_secretsmanager_secret.overmind_runtime.arn, var.enable_internal_ca_secret ? aws_secretsmanager_secret.internal_ca[0].arn : ""])
-      }
-    ]
-  })
-}
-
-resource "aws_iam_instance_profile" "overmind" {
-  name = "${var.project_name}-${var.environment}"
-  role = aws_iam_role.instance.name
-}
-
-resource "aws_instance" "overmind" {
-  ami                         = local.instance_ami_id
-  instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.public[0].id
-  vpc_security_group_ids      = [aws_security_group.app.id]
-  iam_instance_profile        = aws_iam_instance_profile.overmind.name
-  associate_public_ip_address = true
-  key_name                    = var.ssh_key_name == "" ? null : var.ssh_key_name
-  user_data_replace_on_change = true
-  user_data                   = local.user_data
-
-  root_block_device {
-    volume_type = "gp3"
-    volume_size = 30
-    encrypted   = true
-  }
-}
-
-resource "aws_eip" "overmind" {
-  domain = "vpc"
-}
-
-resource "aws_eip_association" "overmind" {
-  instance_id   = aws_instance.overmind.id
-  allocation_id = aws_eip.overmind.id
-}
-
 resource "aws_route53_record" "overmind" {
-  count           = var.create_route53_record && local.overmind_fqdn != local.www_domain ? 1 : 0
+  count           = var.create_route53_record && local.lambda_enabled && local.overmind_fqdn != local.www_domain ? 1 : 0
   zone_id         = local.route53_zone_id
   allow_overwrite = true
   name            = local.overmind_fqdn
   type            = "A"
-  ttl             = 300
-  records         = [aws_eip.overmind.public_ip]
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.overmind[local.overmind_fqdn].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.overmind[local.overmind_fqdn].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
 }
 
 resource "aws_route53_record" "apex" {
-  count           = var.create_route53_record && local.overmind_fqdn != local.root_domain ? 1 : 0
+  count           = var.create_route53_record && local.lambda_enabled && local.overmind_fqdn != local.root_domain ? 1 : 0
   zone_id         = local.route53_zone_id
   allow_overwrite = true
   name            = local.root_domain
   type            = "A"
-  ttl             = 300
-  records         = [aws_eip.overmind.public_ip]
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.overmind[local.root_domain].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.overmind[local.root_domain].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
 }
 
 resource "aws_route53_record" "www" {
-  count           = var.create_route53_record && local.overmind_fqdn != local.www_domain ? 1 : 0
+  count           = var.create_route53_record && local.lambda_enabled && local.overmind_fqdn != local.www_domain ? 1 : 0
   zone_id         = local.route53_zone_id
   allow_overwrite = true
   name            = local.www_domain
   type            = "A"
-  ttl             = 300
-  records         = [aws_eip.overmind.public_ip]
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.overmind[local.www_domain].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.overmind[local.www_domain].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
 }
 
 resource "aws_route53_record" "primary" {
-  count           = var.create_route53_record && local.overmind_fqdn == local.www_domain ? 1 : 0
+  count           = var.create_route53_record && local.lambda_enabled && local.overmind_fqdn == local.www_domain ? 1 : 0
   zone_id         = local.route53_zone_id
   allow_overwrite = true
   name            = local.www_domain
   type            = "A"
-  ttl             = 300
-  records         = [aws_eip.overmind.public_ip]
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.overmind[local.www_domain].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.overmind[local.www_domain].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
 }
 
 resource "aws_cloudwatch_log_group" "lambda" {
@@ -652,11 +585,10 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = merge({
-      AWS_REGION                      = var.aws_region
       OVERMIND_ENVIRONMENT            = var.environment
       OVERMIND_RUNTIME                = "lambda"
       OVERMIND_RUNTIME_SECRET_NAME    = aws_secretsmanager_secret.overmind_runtime.name
-      OVERMIND_POSTGRES_HOST_OVERRIDE = aws_db_proxy.overmind[0].endpoint
+      OVERMIND_POSTGRES_HOST_OVERRIDE = local.lambda_db_host
       OVERMIND_VERSION                = var.overmind_version
       USE_FAKE_DATA                   = tostring(var.use_fake_data)
       }, var.enable_internal_ca_secret ? {
@@ -692,11 +624,10 @@ resource "aws_lambda_function" "scheduled" {
 
   environment {
     variables = merge({
-      AWS_REGION                      = var.aws_region
       OVERMIND_ENVIRONMENT            = var.environment
       OVERMIND_RUNTIME                = "lambda"
       OVERMIND_RUNTIME_SECRET_NAME    = aws_secretsmanager_secret.overmind_runtime.name
-      OVERMIND_POSTGRES_HOST_OVERRIDE = aws_db_proxy.overmind[0].endpoint
+      OVERMIND_POSTGRES_HOST_OVERRIDE = local.lambda_db_host
       OVERMIND_VERSION                = var.overmind_version
       USE_FAKE_DATA                   = tostring(var.use_fake_data)
       }, var.enable_internal_ca_secret ? {
@@ -771,6 +702,26 @@ resource "aws_apigatewayv2_stage" "default" {
       integrationError = "$context.integrationErrorMessage"
     })
   }
+}
+
+resource "aws_apigatewayv2_domain_name" "overmind" {
+  for_each    = local.api_custom_domains
+  domain_name = each.value
+
+  domain_name_configuration {
+    certificate_arn = aws_acm_certificate.domain.arn
+    endpoint_type   = "REGIONAL"
+    security_policy = "TLS_1_2"
+  }
+
+  depends_on = [aws_acm_certificate_validation.domain]
+}
+
+resource "aws_apigatewayv2_api_mapping" "overmind" {
+  for_each    = local.api_custom_domains
+  api_id      = aws_apigatewayv2_api.overmind[0].id
+  domain_name = aws_apigatewayv2_domain_name.overmind[each.value].id
+  stage       = aws_apigatewayv2_stage.default[0].id
 }
 
 resource "aws_lambda_permission" "api_gateway" {
@@ -882,17 +833,6 @@ resource "aws_iam_role_policy" "github_deploy" {
           "ecr:PutImage",
           "ecr:BatchGetImage",
           "ecr:DescribeRepositories"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ssm:SendCommand",
-          "ssm:GetCommandInvocation",
-          "ssm:ListCommandInvocations",
-          "ec2:DescribeInstances",
-          "ec2:DescribeInstanceStatus"
         ]
         Resource = "*"
       },

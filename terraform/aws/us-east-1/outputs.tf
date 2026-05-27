@@ -8,11 +8,6 @@ output "overmind_url" {
   value       = "https://${local.overmind_fqdn}"
 }
 
-output "overmind_public_ip" {
-  description = "Elastic IP assigned to Overmind."
-  value       = aws_eip.overmind.public_ip
-}
-
 output "route53_record_created" {
   description = "Whether Terraform created public domain A records."
   value       = var.create_route53_record
@@ -45,21 +40,21 @@ output "acm_validation_records" {
 }
 
 output "domain_records" {
-  description = "Public DNS A records managed or expected for the domain."
+  description = "Public DNS records managed or expected for the serverless Overmind domain."
   value = {
     apex     = local.root_domain
     www      = local.www_domain
     overmind = local.overmind_fqdn
-    value    = aws_eip.overmind.public_ip
+    value    = var.enable_lambda_overmind ? aws_apigatewayv2_domain_name.overmind[local.overmind_fqdn].domain_name_configuration[0].target_domain_name : null
   }
 }
 
 output "manual_dns_record" {
   description = "Create these DNS records outside Terraform when create_route53_record=false."
   value = {
-    type    = "A"
+    type    = "A/AAAA alias"
     records = distinct([local.root_domain, local.www_domain, local.overmind_fqdn])
-    value   = aws_eip.overmind.public_ip
+    value   = var.enable_lambda_overmind ? aws_apigatewayv2_domain_name.overmind[local.overmind_fqdn].domain_name_configuration[0].target_domain_name : null
   }
 }
 
@@ -76,11 +71,6 @@ output "runtime_secret_arn" {
 output "github_actions_role_arn" {
   description = "GitHub Actions OIDC role ARN."
   value       = aws_iam_role.github_deploy.arn
-}
-
-output "ec2_instance_id" {
-  description = "Overmind EC2 instance ID, used by the deploy workflow through SSM."
-  value       = aws_instance.overmind.id
 }
 
 output "lambda_api_endpoint" {
@@ -100,5 +90,20 @@ output "lambda_scheduled_function_name" {
 
 output "rds_proxy_endpoint" {
   description = "RDS Proxy endpoint used by Lambda functions."
-  value       = var.enable_lambda_overmind ? aws_db_proxy.overmind[0].endpoint : null
+  value       = var.enable_lambda_overmind && var.enable_rds_proxy ? aws_db_proxy.overmind[0].endpoint : null
+}
+
+output "lambda_database_endpoint" {
+  description = "Database endpoint configured for Lambda functions."
+  value       = var.enable_lambda_overmind ? local.lambda_db_host : null
+}
+
+output "api_custom_domain_targets" {
+  description = "API Gateway custom domain regional targets by hostname."
+  value = var.enable_lambda_overmind ? {
+    for hostname, domain in aws_apigatewayv2_domain_name.overmind : hostname => {
+      target_domain_name = domain.domain_name_configuration[0].target_domain_name
+      hosted_zone_id     = domain.domain_name_configuration[0].hosted_zone_id
+    }
+  } : {}
 }

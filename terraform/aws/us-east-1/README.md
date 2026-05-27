@@ -26,22 +26,22 @@ terraform init && terraform fmt && terraform validate && terraform apply
 
 Outputs needed for GitHub Actions setup:
 ```bash
-terraform output -json | jq '.github_actions_role_arn.value, .ecr_repository_url.value, .ec2_instance_id.value'
+terraform output -json | jq '.github_actions_role_arn.value, .ecr_repository_url.value, .lambda_api_endpoint.value'
 ```
 
 # Batocera Overmind on AWS, us-east-1
 
 **Status: ✅ Ready to deploy** against existing AWS accounts.
 
-This Terraform stack deploys Overmind on low-cost AWS infrastructure:
+This Terraform stack deploys Overmind on low-cost serverless AWS infrastructure:
 
 - Amazon ECR repository for the Overmind image.
-- One Amazon Linux 2023 EC2 instance running Docker.
-- Caddy in Docker for public HTTPS and automatic Let's Encrypt certificates.
-- Private RDS PostgreSQL, reachable only from the Overmind instance security group.
+- API Gateway HTTP API with low/medium/high Lambda tiers.
+- API Gateway custom domains for public HTTPS using ACM.
+- Private RDS PostgreSQL, reachable from Lambda security groups.
 - AWS Secrets Manager for database credentials and `SECRET_KEY`.
-- SSM Session Manager/Run Command for deployment, so SSH can stay disabled.
-- GitHub Actions OIDC role for image push and SSM deployment.
+- EventBridge scheduled maintenance jobs.
+- GitHub Actions OIDC role for image push and Lambda deployment.
 - Optional Route 53 public hosted zone for `batocera-swarm.com`.
 - ACM public certificate for `batocera-swarm.com`, `www.batocera-swarm.com`, and configured SANs, with optional DNS validation records.
 
@@ -73,39 +73,39 @@ terraform apply
 # 4. Capture outputs for GitHub Actions
 terraform output github_actions_role_arn
 terraform output ecr_repository_url
-terraform output ec2_instance_id
+terraform output lambda_api_endpoint
 
-# 5. Deploy (auto on git push, or manual via SSM)
-# After apply, push to main branch → GitHub Actions deploys
-# OR manually trigger: aws ssm send-command \
-#   --instance-ids "$(terraform output -raw ec2_instance_id)" \
-#   --document-name AWS-RunShellScript \
-#   --parameters commands='["/opt/overmind/deploy.sh"]'
+# 5. Deploy
+# After apply, push to main branch → GitHub Actions pushes ECR images.
 ```
 
 **Estimated time:** ~15–20 minutes (init: 2–5s, apply: 8–12min, DNS propagation: 5–10min).
 
 ## Architecture Choice
 
-The initial compute target is EC2 + Docker instead of ECS/Fargate + ALB. That keeps the resource list small and avoids always-on ALB and NAT Gateway costs. HTTPS for the EC2-hosted app is handled by Caddy with Let's Encrypt because ACM public certificates cannot be exported and attached directly to a process on EC2. The stack still provisions an ACM certificate for future ALB/CloudFront use and for domain readiness.
+The compute target is API Gateway + Lambda using one shared Overmind image with
+separate low/medium/high memory tiers. This avoids an always-on EC2 instance,
+ALB, or NAT Gateway for the core API path.
 
 ## Public TLS vs Internal Drone CA
 
-Public browser TLS is provided by Caddy/Let's Encrypt for the configured Overmind hostname. ACM certificate DNS validation records are also managed when `create_acm_validation_records = true`.
+Public browser TLS is provided by API Gateway custom domains with ACM. ACM
+certificate DNS validation records are also managed when
+`create_acm_validation_records = true`.
 
 The optional `enable_internal_ca_secret` variable creates a separate private CA secret for future Drone trust workflows. That private key is stored in Secrets Manager and Terraform state, so leave it disabled unless the application explicitly needs Terraform-created internal CA material.
 
 ## Serverless Overmind
 
-This stack now provisions the Lambda/API Gateway deployment alongside the
-existing EC2/Docker deployment when `enable_lambda_overmind = true`.
+This stack provisions the Lambda/API Gateway deployment when
+`enable_lambda_overmind = true`.
 
-- The EC2 instance, EIP, and Caddy path remain the rollback path.
 - API Gateway sends default/simple routes to the low-memory Lambda.
 - Admin/device/log/system routes go to the medium-memory Lambda.
 - ROM metadata, master asset, and bulk sync routes go to the high-memory Lambda.
 - EventBridge runs scheduled maintenance jobs without long-lived app threads.
-- Lambda reaches PostgreSQL through RDS Proxy.
+- Lambda reaches PostgreSQL directly by default. Set `enable_rds_proxy = true`
+  to use RDS Proxy when the AWS account plan supports it.
 
 Build and push the Lambda image from the Overmind repo before applying:
 
@@ -119,7 +119,8 @@ After apply, test the serverless endpoint:
 terraform output lambda_api_endpoint
 ```
 
-DNS remains pointed at EC2 until you deliberately switch it.
+Route 53 records point at API Gateway custom domains when
+`create_route53_record = true`.
 
 ## Remote Terraform State
 
@@ -161,19 +162,16 @@ github_org    = "Batocera-Fleet-Federation"     # Org name
 github_repo   = "batocera.overmind"             # Repo containing deploy workflow
 github_branch = "main"                          # Branch allowed to deploy
 
-# AWS & compute
+# AWS & Lambda compute
 aws_region    = "us-east-1"
-instance_type = "t3.micro"                      # t3.micro is free-tier eligible
-ami_id        = "resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+lambda_low_memory_mb    = 1024
+lambda_medium_memory_mb = 2048
+lambda_high_memory_mb   = 3008
 
 # Database
 db_instance_class = "db.t3.micro"               # Upgrade to db.t3.small for production
 db_allocated_storage = 20                       # GiB
 db_deletion_protection = false                  # Set true for production
-
-# Optional: break-glass SSH access
-admin_ssh_cidr = ""                             # Leave empty to disable SSH
-ssh_key_name   = ""                             # EC2 key pair name if needed
 
 # Optional: internal CA for Drone trust (rarely used)
 enable_internal_ca_secret = false
@@ -221,20 +219,12 @@ Settings → Secrets and variables → Actions → Repository variables
 ## Deployment Workflows
 
 **Automatic deployment on git push:**
-- Push to `main` → GitHub Actions builds, pushes to ECR, and deploys via SSM.
-
-**Manual deployment via SSM:**
-```bash
-aws ssm send-command \
-  --region us-east-1 \
-  --instance-ids "$(terraform output -raw ec2_instance_id)" \
-  --document-name AWS-RunShellScript \
-  --parameters commands='["/opt/overmind/deploy.sh IMAGE_TAG"]'
-```
-Replace `IMAGE_TAG` with ECR image tag (e.g., `latest` or git SHA).
+- Push to `main` → GitHub Actions builds and pushes the normal image plus
+  `lambda-latest` to ECR. Lambda functions use the `lambda-latest` image tag.
 
 **Manual dispatch from GitHub:**
-The `.github/workflows/deploy-overmind-aws.yml` workflow supports `workflow_dispatch` for on-demand deployments from the GitHub UI.
+Use the Overmind CI workflow or run `scripts/docker-publish-lambda-ecr.sh`
+locally when you need to refresh the Lambda image outside a push.
 
 ## Application Persistence
 
@@ -254,19 +244,12 @@ In production mode, startup fails clearly if PostgreSQL configuration is absent.
 
 After Terraform and DNS:
 
-1. Run the deploy workflow.
+1. Confirm `curl "$(terraform output -raw lambda_api_endpoint)/health"`.
 2. Visit `https://batocera-swarm.com/`.
-3. Create an Overlord user.
+3. Create or log in as an Overlord user.
 4. Generate a Drone token.
-5. Restart the app container:
-   ```bash
-   aws ssm send-command \
-     --instance-ids "$(terraform output -raw ec2_instance_id)" \
-     --document-name AWS-RunShellScript \
-     --parameters commands='["sudo systemctl restart overmind.service"]'
-   ```
-6. Log in again and confirm the user and Drone token data persisted.
-7. Confirm `https://batocera-swarm.com` is unchanged.
+5. Log in again and confirm user and Drone token data persisted.
+6. Confirm the public hostname resolves through API Gateway.
 
 ## Known Limitations & Next Steps
 
@@ -305,9 +288,6 @@ Because Terraform no longer updates the existing secret payload, changes to Terr
 **RDS burstable instance:**
 `db.t3.micro` is appropriate for development. For production traffic, upgrade to `db.t3.small` or `db.t3.medium` and set `db_deletion_protection = true`.
 
-**Caddy Let's Encrypt:**
-Requires ports 80 and 443 open to the internet during certificate issuance and renewal. If your firewall blocks outbound ACME, configure a custom ACME provider.
-
 **GitHub OIDC provider:**
 If your AWS account already has a GitHub OIDC provider, Terraform will fail to create a duplicate. Either:
 - Import the existing provider: `terraform import aws_iam_openid_connect_provider.github <provider_arn>`
@@ -328,18 +308,22 @@ terraform init -backend-config="bucket=my-tf-state" \
 
 Cost-impacting resources:
 
-- EC2 `t3.micro` instance and public IPv4/Elastic IP.
+- API Gateway HTTP API requests and Lambda invocations/duration.
 - RDS PostgreSQL `db.t3.micro` and 20 GiB storage.
 - Route 53 hosted zone if one exists or is created elsewhere.
 - ECR image storage after free allowances.
-- Data transfer and CloudWatch/SSM operational logs.
+- Data transfer and CloudWatch logs.
 
-This stack intentionally avoids NAT Gateway, ALB, ECS/Fargate, and Multi-AZ RDS by default.
+This stack intentionally avoids EC2, NAT Gateway, ALB, ECS/Fargate, and Multi-AZ
+RDS by default.
 
 ## Architecture Choices
 
-The initial compute target is EC2 + Docker instead of ECS/Fargate + ALB. That keeps the resource list small and avoids always-on ALB and NAT Gateway costs. HTTPS for the EC2-hosted app is handled by Caddy with Let's Encrypt because ACM public certificates cannot be exported and attached directly to a process on EC2. The stack still provisions an ACM certificate for future ALB/CloudFront use and for domain readiness.
+The compute target is API Gateway + Lambda. Terraform creates separate Lambda
+functions for low, medium, and high-cost endpoint groups from the same ECR image.
 
-Public browser TLS is provided by Caddy/Let's Encrypt for the configured Overmind hostname. ACM certificate DNS validation records are also managed when `create_acm_validation_records = true`.
+Public browser TLS is provided by API Gateway custom domains and ACM. ACM
+certificate DNS validation records are also managed when
+`create_acm_validation_records = true`.
 
 The optional `enable_internal_ca_secret` variable creates a separate private CA secret for future Drone trust workflows. That private key is stored in Secrets Manager and Terraform state, so leave it disabled unless the application explicitly needs Terraform-created internal CA material.

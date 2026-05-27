@@ -118,37 +118,37 @@ variable "availability_zones" {
 }
 
 variable "ami_id" {
-  description = "Optional AMI ID or EC2-supported SSM dynamic reference. Leave empty to discover latest Amazon Linux 2023."
+  description = "Legacy EC2 AMI setting retained for old tfvars compatibility. Not used by the Lambda deployment."
   type        = string
   default     = ""
 }
 
 variable "admin_ssh_cidr" {
-  description = "Optional CIDR allowed to SSH to the instance. Empty disables SSH ingress."
+  description = "Legacy EC2 SSH setting retained for old tfvars compatibility. Not used by the Lambda deployment."
   type        = string
   default     = ""
 }
 
 variable "instance_type" {
-  description = "EC2 instance size. t3.micro is free-tier-friendly where eligible."
+  description = "Legacy EC2 instance setting retained for old tfvars compatibility. Not used by the Lambda deployment."
   type        = string
   default     = "t3.micro"
 }
 
 variable "ssh_key_name" {
-  description = "Optional EC2 key pair name for break-glass SSH access."
+  description = "Legacy EC2 key setting retained for old tfvars compatibility. Not used by the Lambda deployment."
   type        = string
   default     = ""
 }
 
 variable "overmind_container_port" {
-  description = "Port exposed by the Overmind container."
+  description = "Legacy container port setting retained for old tfvars compatibility. Not used by the Lambda deployment."
   type        = number
   default     = 8000
 }
 
 variable "enable_lambda_overmind" {
-  description = "Create Lambda/API Gateway serverless Overmind resources alongside the existing EC2 deployment."
+  description = "Create Lambda/API Gateway serverless Overmind resources."
   type        = bool
   default     = true
 }
@@ -180,7 +180,7 @@ variable "lambda_medium_memory_mb" {
 variable "lambda_high_memory_mb" {
   description = "Memory tier for heavy metadata/sync routes. Lambda CPU scales with this value."
   type        = number
-  default     = 4096
+  default     = 3008
 }
 
 variable "lambda_low_timeout_seconds" {
@@ -213,6 +213,12 @@ variable "lambda_create_nat_gateway" {
   default     = false
 }
 
+variable "enable_rds_proxy" {
+  description = "Create RDS Proxy for Lambda database pooling. Some AWS free-plan accounts block this feature; disable to connect Lambda directly to RDS."
+  type        = bool
+  default     = false
+}
+
 variable "lambda_log_retention_days" {
   description = "CloudWatch log retention for Lambda functions."
   type        = number
@@ -229,6 +235,12 @@ variable "lambda_cors_allowed_origins" {
   description = "Allowed origins for HTTP API CORS."
   type        = list(string)
   default     = ["*"]
+}
+
+variable "manage_existing_db_app_security_group_rule" {
+  description = "Legacy cleanup option for the old EC2 app to RDS ingress rule. Leave false unless importing that existing rule into Terraform for cleanup."
+  type        = bool
+  default     = false
 }
 
 variable "db_instance_class" {

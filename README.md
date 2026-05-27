@@ -42,6 +42,41 @@ Docker must be running. If no ROM files are present, the swarm scripts fail and 
 .github/scripts/swarm-up.sh --import-data --reset-data --seed local-demo
 ```
 
+## Scripts
+
+### TL;DR: deploy the latest Overmind Lambda image
+
+After `batocera-overmind:lambda-latest` has been pushed to ECR, update the AWS Lambda functions with:
+
+```bash
+.github/scripts/update-overmind-lambdas.sh
+```
+
+The script defaults to production:
+
+```bash
+AWS_REGION=us-east-1
+PROJECT_NAME=bff-overmind
+ENVIRONMENT=prod
+ECR_REPO=batocera-overmind
+TAG=lambda-latest
+```
+
+Lambda pins an image digest when function code is updated, so pushing a new `lambda-latest` image to ECR is not enough by itself. Run `update-overmind-lambdas.sh` after the image push to make these functions re-resolve the tag:
+
+```text
+bff-overmind-prod-low
+bff-overmind-prod-medium
+bff-overmind-prod-high
+bff-overmind-prod-scheduled
+```
+
+To deploy a different tag or environment, override only the value you need:
+
+```bash
+TAG=v0.0.17-alpha .github/scripts/update-overmind-lambdas.sh
+```
+
 ## Onboarding
 
 The default swarm starts Drones as real unapproved devices. They know the Overmind URL, submit a pending request, and show up in Overmind as **Psionic connection detected**. The Overlord approves them from the Drones page.
