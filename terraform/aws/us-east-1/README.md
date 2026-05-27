@@ -95,6 +95,55 @@ Public browser TLS is provided by Caddy/Let's Encrypt for the configured Overmin
 
 The optional `enable_internal_ca_secret` variable creates a separate private CA secret for future Drone trust workflows. That private key is stored in Secrets Manager and Terraform state, so leave it disabled unless the application explicitly needs Terraform-created internal CA material.
 
+## Serverless Overmind
+
+This stack now provisions the Lambda/API Gateway deployment alongside the
+existing EC2/Docker deployment when `enable_lambda_overmind = true`.
+
+- The EC2 instance, EIP, and Caddy path remain the rollback path.
+- API Gateway sends default/simple routes to the low-memory Lambda.
+- Admin/device/log/system routes go to the medium-memory Lambda.
+- ROM metadata, master asset, and bulk sync routes go to the high-memory Lambda.
+- EventBridge runs scheduled maintenance jobs without long-lived app threads.
+- Lambda reaches PostgreSQL through RDS Proxy.
+
+Build and push the Lambda image from the Overmind repo before applying:
+
+```bash
+TAG=lambda-latest scripts/docker-publish-lambda-ecr.sh
+```
+
+After apply, test the serverless endpoint:
+
+```bash
+terraform output lambda_api_endpoint
+```
+
+DNS remains pointed at EC2 until you deliberately switch it.
+
+## Remote Terraform State
+
+Bootstrap the remote state bucket and lock table first:
+
+```bash
+cd .github/terraform/bootstrap/us-east-1
+terraform init
+terraform apply
+```
+
+Then migrate this stack:
+
+```bash
+cd ../../aws/us-east-1
+terraform init -migrate-state
+```
+
+The backend uses:
+
+- S3 bucket: `bff-overmind-prod-terraform-state`
+- State key: `aws/us-east-1/overmind.tfstate`
+- DynamoDB lock table: `bff-overmind-prod-terraform-locks`
+
 ## Detailed Configuration
 
 Edit `terraform.tfvars` with your environment:

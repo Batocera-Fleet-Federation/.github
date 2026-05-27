@@ -82,3 +82,23 @@ output "ec2_instance_id" {
   description = "Overmind EC2 instance ID, used by the deploy workflow through SSM."
   value       = aws_instance.overmind.id
 }
+
+output "lambda_api_endpoint" {
+  description = "HTTP API endpoint for the Lambda Overmind deployment."
+  value       = var.enable_lambda_overmind ? aws_apigatewayv2_api.overmind[0].api_endpoint : null
+}
+
+output "lambda_function_names" {
+  description = "Serverless Overmind Lambda function names by tier."
+  value       = var.enable_lambda_overmind ? { for tier, function in aws_lambda_function.api : tier => function.function_name } : {}
+}
+
+output "lambda_scheduled_function_name" {
+  description = "Scheduled maintenance Lambda function name."
+  value       = var.enable_lambda_overmind ? aws_lambda_function.scheduled[0].function_name : null
+}
+
+output "rds_proxy_endpoint" {
+  description = "RDS Proxy endpoint used by Lambda functions."
+  value       = var.enable_lambda_overmind ? aws_db_proxy.overmind[0].endpoint : null
+}

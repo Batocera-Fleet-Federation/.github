@@ -147,6 +147,90 @@ variable "overmind_container_port" {
   default     = 8000
 }
 
+variable "enable_lambda_overmind" {
+  description = "Create Lambda/API Gateway serverless Overmind resources alongside the existing EC2 deployment."
+  type        = bool
+  default     = true
+}
+
+variable "lambda_image_tag" {
+  description = "ECR image tag used by Lambda functions."
+  type        = string
+  default     = "lambda-latest"
+}
+
+variable "lambda_architectures" {
+  description = "Lambda instruction set architectures. The ECR image must include matching architecture images."
+  type        = list(string)
+  default     = ["x86_64"]
+}
+
+variable "lambda_low_memory_mb" {
+  description = "Memory tier for low-cost API routes. Lambda CPU scales with this value."
+  type        = number
+  default     = 1024
+}
+
+variable "lambda_medium_memory_mb" {
+  description = "Memory tier for medium-cost API routes. Lambda CPU scales with this value."
+  type        = number
+  default     = 2048
+}
+
+variable "lambda_high_memory_mb" {
+  description = "Memory tier for heavy metadata/sync routes. Lambda CPU scales with this value."
+  type        = number
+  default     = 4096
+}
+
+variable "lambda_low_timeout_seconds" {
+  description = "Timeout for low-cost API routes."
+  type        = number
+  default     = 15
+}
+
+variable "lambda_medium_timeout_seconds" {
+  description = "Timeout for medium-cost API routes."
+  type        = number
+  default     = 30
+}
+
+variable "lambda_high_timeout_seconds" {
+  description = "Timeout for heavy metadata/sync routes."
+  type        = number
+  default     = 120
+}
+
+variable "lambda_reserved_concurrency" {
+  description = "Optional reserved concurrency applied to each API Lambda. Null leaves it unreserved."
+  type        = number
+  default     = null
+}
+
+variable "lambda_create_nat_gateway" {
+  description = "Create a NAT Gateway for Lambda outbound internet access to SMTP, OAuth providers, webhooks, and other public APIs."
+  type        = bool
+  default     = false
+}
+
+variable "lambda_log_retention_days" {
+  description = "CloudWatch log retention for Lambda functions."
+  type        = number
+  default     = 30
+}
+
+variable "api_gateway_log_retention_days" {
+  description = "CloudWatch log retention for API Gateway access logs."
+  type        = number
+  default     = 30
+}
+
+variable "lambda_cors_allowed_origins" {
+  description = "Allowed origins for HTTP API CORS."
+  type        = list(string)
+  default     = ["*"]
+}
+
 variable "db_instance_class" {
   description = "RDS PostgreSQL instance class."
   type        = string
