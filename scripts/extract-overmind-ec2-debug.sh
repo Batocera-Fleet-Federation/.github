@@ -8,7 +8,7 @@ SERVICE_NAME="${SERVICE_NAME:-overmind.service}"
 CONTAINER_NAME="${CONTAINER_NAME:-overmind}"
 APP_PORT="${APP_PORT:-8000}"
 PUBLIC_URL="${PUBLIC_URL:-https://www.batocera-swarm.com}"
-LOG_TAIL="${LOG_TAIL:-2000}"
+LOG_TAIL="${LOG_TAIL:-300}"
 OUTPUT_DIR="${OUTPUT_DIR:-./ec2-debug}"
 SSM_OUTPUT_S3_BUCKET="${SSM_OUTPUT_S3_BUCKET:-}"
 SSM_OUTPUT_S3_PREFIX="${SSM_OUTPUT_S3_PREFIX:-overmind-debug}"
@@ -101,13 +101,8 @@ printf 'container=%s service=%s app_port=%s public_url=%s log_tail=%s\\n' "\${CO
 
 run "uptime" uptime
 run "free -m" free -m
-run "df -h" df -h
-run "inode usage" df -ih
-run "mounts" mount
-run "kernel oom / memory pressure hints" dmesg -T
 
 run "systemctl status \${SERVICE_NAME}" sudo systemctl status "\${SERVICE_NAME}" --no-pager -l
-run "journalctl \${SERVICE_NAME}" sudo journalctl -u "\${SERVICE_NAME}" --no-pager -n "\${LOG_TAIL}"
 run "docker version" sudo docker version
 run "docker ps -a" sudo docker ps -a
 run "docker stats no-stream" sudo docker stats --no-stream
@@ -152,6 +147,12 @@ fi
 
 section "docker events recent"
 timeout 5 sudo docker events --since 30m 2>&1 || true
+
+run_shell "journalctl \${SERVICE_NAME} recent filtered" "sudo journalctl -u '\${SERVICE_NAME}' --no-pager -n '\${LOG_TAIL}' | grep -Ev 'Pulling fs layer|Waiting|Verifying Checksum|Download complete|Pull complete|Already exists' | tail -n 160"
+run "df -h" df -h
+run "inode usage" df -ih
+run_shell "kernel oom / memory pressure hints" "dmesg -T | grep -Ei 'oom|out of memory|killed process|memory pressure|hung task|blocked for more than|docker|overmind' | tail -n 120"
+run_shell "kernel recent tail" "dmesg -T | tail -n 80"
 
 section "end"
 date -u
