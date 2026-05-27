@@ -269,6 +269,17 @@ resource "aws_security_group_rule" "db_from_lambda_direct" {
   source_security_group_id = aws_security_group.lambda[0].id
 }
 
+resource "aws_security_group_rule" "db_from_public_admin" {
+  count             = local.db_public_access_enabled ? 1 : 0
+  type              = "ingress"
+  description       = "PostgreSQL from admin public IP"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  security_group_id = aws_security_group.db.id
+  cidr_blocks       = [local.db_public_access_cidr]
+}
+
 resource "aws_security_group" "vpc_endpoints" {
   count       = local.lambda_enabled ? 1 : 0
   name        = "${var.project_name}-${var.environment}-vpc-endpoints"
@@ -318,7 +329,7 @@ resource "aws_db_instance" "overmind" {
   password                     = random_password.db_password.result
   db_subnet_group_name         = aws_db_subnet_group.overmind.name
   vpc_security_group_ids       = [aws_security_group.db.id]
-  publicly_accessible          = false
+  publicly_accessible          = local.db_public_access_enabled
   multi_az                     = false
   storage_encrypted            = true
   deletion_protection          = var.db_deletion_protection

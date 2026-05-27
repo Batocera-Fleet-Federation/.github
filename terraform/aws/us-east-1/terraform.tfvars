@@ -75,6 +75,10 @@ private_subnet_cidrs      = ["10.42.110.0/24", "10.42.120.0/24"]
 ami_id                    = ""
 lambda_create_nat_gateway = true
 
+# Optional temporary RDS admin access. Set to your current public IP or CIDR
+# such as "203.0.113.10" or "203.0.113.10/32"; leave empty to keep RDS private.
+db_public_access_cidr = "72.176.228.250"
+
 # Optional break-glass SSH. Prefer SSM Session Manager.
 admin_ssh_cidr = ""
 ssh_key_name   = ""

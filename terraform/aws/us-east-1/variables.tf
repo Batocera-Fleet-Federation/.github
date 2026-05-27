@@ -249,6 +249,17 @@ variable "manage_existing_db_app_security_group_rule" {
   default     = false
 }
 
+variable "db_public_access_cidr" {
+  description = "Optional admin public IP or CIDR allowed to connect directly to RDS PostgreSQL. Leave empty to keep RDS private and remove the public ingress rule."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.db_public_access_cidr == "" || can(cidrhost(strcontains(var.db_public_access_cidr, "/") ? var.db_public_access_cidr : "${var.db_public_access_cidr}/32", 0))
+    error_message = "db_public_access_cidr must be empty, an IPv4 address such as 203.0.113.10, or a valid IPv4 CIDR such as 203.0.113.10/32."
+  }
+}
+
 variable "db_instance_class" {
   description = "RDS PostgreSQL instance class."
   type        = string

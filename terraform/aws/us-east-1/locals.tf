@@ -13,12 +13,15 @@ locals {
     [local.www_domain, local.overmind_fqdn == local.root_domain ? "" : local.overmind_fqdn],
     var.certificate_sans
   )))
-  email_from_address = var.email_from_address == "" ? "no-reply@${local.root_domain}" : var.email_from_address
-  lambda_enabled     = var.enable_lambda_overmind
-  rds_proxy_enabled  = local.lambda_enabled && var.enable_rds_proxy
-  lambda_db_host     = local.rds_proxy_enabled ? aws_db_proxy.overmind[0].endpoint : aws_db_instance.overmind.address
-  api_custom_domains = local.lambda_enabled ? toset(distinct([local.root_domain, local.www_domain, local.overmind_fqdn])) : toset([])
-  lambda_subnet_ids  = var.lambda_create_nat_gateway ? aws_subnet.private[*].id : aws_subnet.public[*].id
+  email_from_address       = var.email_from_address == "" ? "no-reply@${local.root_domain}" : var.email_from_address
+  lambda_enabled           = var.enable_lambda_overmind
+  rds_proxy_enabled        = local.lambda_enabled && var.enable_rds_proxy
+  lambda_db_host           = local.rds_proxy_enabled ? aws_db_proxy.overmind[0].endpoint : aws_db_instance.overmind.address
+  api_custom_domains       = local.lambda_enabled ? toset(distinct([local.root_domain, local.www_domain, local.overmind_fqdn])) : toset([])
+  lambda_subnet_ids        = var.lambda_create_nat_gateway ? aws_subnet.private[*].id : aws_subnet.public[*].id
+  db_public_access_input   = trimspace(var.db_public_access_cidr)
+  db_public_access_cidr    = local.db_public_access_input == "" ? "" : (strcontains(local.db_public_access_input, "/") ? local.db_public_access_input : "${local.db_public_access_input}/32")
+  db_public_access_enabled = local.db_public_access_cidr != ""
   lambda_function_tiers = {
     low = {
       memory  = var.lambda_low_memory_mb

@@ -172,6 +172,7 @@ lambda_high_memory_mb   = 3008
 db_instance_class = "db.t3.micro"               # Upgrade to db.t3.small for production
 db_allocated_storage = 20                       # GiB
 db_deletion_protection = false                  # Set true for production
+db_public_access_cidr = ""                      # Optional: your public IP/CIDR for direct admin psql access
 
 # Optional: internal CA for Drone trust (rarely used)
 enable_internal_ca_secret = false
@@ -287,6 +288,15 @@ Because Terraform no longer updates the existing secret payload, changes to Terr
 
 **RDS burstable instance:**
 `db.t3.micro` is appropriate for development. For production traffic, upgrade to `db.t3.small` or `db.t3.medium` and set `db_deletion_protection = true`.
+
+**Temporary public RDS access:**
+Leave `db_public_access_cidr = ""` for the normal private-only database posture. To connect from your workstation, set it to your current public IPv4 address or CIDR:
+
+```hcl
+db_public_access_cidr = "203.0.113.10"
+```
+
+Terraform normalizes a plain IPv4 address to `/32`, marks the RDS instance publicly accessible, and creates a PostgreSQL security group ingress rule only for that CIDR. Set the value back to `""` and apply again to remove the ingress rule and return the instance to private access.
 
 **GitHub OIDC provider:**
 If your AWS account already has a GitHub OIDC provider, Terraform will fail to create a duplicate. Either:
