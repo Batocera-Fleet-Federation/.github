@@ -111,6 +111,12 @@ variable "public_subnet_cidrs" {
   default     = ["10.42.10.0/24"]
 }
 
+variable "private_subnet_cidrs" {
+  description = "Private subnet CIDRs for Lambda when lambda_create_nat_gateway=true. Must cover the selected availability zones."
+  type        = list(string)
+  default     = ["10.42.110.0/24", "10.42.120.0/24"]
+}
+
 variable "availability_zones" {
   description = "Optional explicit availability zones. Leave empty to discover available AZs."
   type        = list(string)

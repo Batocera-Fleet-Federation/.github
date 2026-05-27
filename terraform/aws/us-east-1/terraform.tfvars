@@ -66,12 +66,14 @@ smtp_starttls      = true
 # GOOGLE_CLIENT_ID/SECRET, and GITHUB_CLIENT_ID/SECRET directly in that secret.
 # Terraform is configured to preserve its existing payload on later applies.
 
-ecr_repository_name = "batocera-overmind"
-instance_type       = "t3.micro"
-db_instance_class   = "db.t3.micro"
-availability_zones  = ["us-east-1a", "us-east-1b"]
-public_subnet_cidrs = ["10.42.10.0/24", "10.42.20.0/24"]
-ami_id              = ""
+ecr_repository_name       = "batocera-overmind"
+instance_type             = "t3.micro"
+db_instance_class         = "db.t3.micro"
+availability_zones        = ["us-east-1a", "us-east-1b"]
+public_subnet_cidrs       = ["10.42.10.0/24", "10.42.20.0/24"]
+private_subnet_cidrs      = ["10.42.110.0/24", "10.42.120.0/24"]
+ami_id                    = ""
+lambda_create_nat_gateway = true
 
 # Optional break-glass SSH. Prefer SSM Session Manager.
 admin_ssh_cidr = ""

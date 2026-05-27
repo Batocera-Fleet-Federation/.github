@@ -89,6 +89,7 @@ Icon?
 
 logs/
 *.log
+scripts/debug-output/
 
 # =============================================================================
 # Optional: Keep folder structure while ignoring contents

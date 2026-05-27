@@ -103,6 +103,13 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 }
 
+resource "aws_subnet" "private" {
+  count             = var.lambda_create_nat_gateway ? min(2, length(local.availability_zones)) : 0
+  vpc_id            = aws_vpc.overmind.id
+  cidr_block        = var.private_subnet_cidrs[count.index]
+  availability_zone = local.availability_zones[count.index]
+}
+
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.overmind.id
 
@@ -116,6 +123,35 @@ resource "aws_route_table_association" "public" {
   count          = length(aws_subnet.public)
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
+}
+
+resource "aws_eip" "nat" {
+  count  = var.lambda_create_nat_gateway ? 1 : 0
+  domain = "vpc"
+}
+
+resource "aws_nat_gateway" "lambda" {
+  count         = var.lambda_create_nat_gateway ? 1 : 0
+  allocation_id = aws_eip.nat[0].id
+  subnet_id     = aws_subnet.public[0].id
+
+  depends_on = [aws_internet_gateway.overmind]
+}
+
+resource "aws_route_table" "private" {
+  count  = var.lambda_create_nat_gateway ? 1 : 0
+  vpc_id = aws_vpc.overmind.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.lambda[0].id
+  }
+}
+
+resource "aws_route_table_association" "private" {
+  count          = length(aws_subnet.private)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[0].id
 }
 
 resource "aws_security_group" "app" {
@@ -297,7 +333,7 @@ resource "aws_vpc_endpoint" "secretsmanager" {
   vpc_id              = aws_vpc.overmind.id
   service_name        = "com.amazonaws.${var.aws_region}.secretsmanager"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = aws_subnet.public[*].id
+  subnet_ids          = local.lambda_subnet_ids
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
 }
@@ -589,6 +625,7 @@ resource "aws_lambda_function" "api" {
       OVERMIND_RUNTIME                = "lambda"
       OVERMIND_RUNTIME_SECRET_NAME    = aws_secretsmanager_secret.overmind_runtime.name
       OVERMIND_POSTGRES_HOST_OVERRIDE = local.lambda_db_host
+      JWT_SIGNING_SECRET              = random_password.secret_key.result
       OVERMIND_VERSION                = var.overmind_version
       USE_FAKE_DATA                   = tostring(var.use_fake_data)
       }, var.enable_internal_ca_secret ? {
@@ -597,7 +634,7 @@ resource "aws_lambda_function" "api" {
   }
 
   vpc_config {
-    subnet_ids         = aws_subnet.public[*].id
+    subnet_ids         = local.lambda_subnet_ids
     security_group_ids = [aws_security_group.lambda[0].id]
   }
 
@@ -628,6 +665,7 @@ resource "aws_lambda_function" "scheduled" {
       OVERMIND_RUNTIME                = "lambda"
       OVERMIND_RUNTIME_SECRET_NAME    = aws_secretsmanager_secret.overmind_runtime.name
       OVERMIND_POSTGRES_HOST_OVERRIDE = local.lambda_db_host
+      JWT_SIGNING_SECRET              = random_password.secret_key.result
       OVERMIND_VERSION                = var.overmind_version
       USE_FAKE_DATA                   = tostring(var.use_fake_data)
       }, var.enable_internal_ca_secret ? {
@@ -636,7 +674,7 @@ resource "aws_lambda_function" "scheduled" {
   }
 
   vpc_config {
-    subnet_ids         = aws_subnet.public[*].id
+    subnet_ids         = local.lambda_subnet_ids
     security_group_ids = [aws_security_group.lambda[0].id]
   }
 

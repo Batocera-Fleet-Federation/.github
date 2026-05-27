@@ -77,6 +77,36 @@ To deploy a different tag or environment, override only the value you need:
 TAG=v0.0.17-alpha .github/scripts/update-overmind-lambdas.sh
 ```
 
+### TL;DR: collect Overmind Lambda debug logs
+
+For the serverless AWS deployment, collect API Gateway state, Lambda configuration, recent Lambda logs, API Gateway access logs, DNS output, and curl timing with:
+
+```bash
+.github/scripts/debug-overmind-lambda.sh
+```
+
+The script saves one file per diagnostic section, plus `combined.log`, under:
+
+```text
+.github/scripts/debug-output/overmind-lambda/<timestamp>/
+```
+
+It defaults to:
+
+```bash
+AWS_REGION=us-east-1
+PROJECT_NAME=bff-overmind
+ENVIRONMENT=prod
+PUBLIC_URL=https://www.batocera-swarm.com
+SINCE=1h
+```
+
+To collect a larger window:
+
+```bash
+SINCE=6h .github/scripts/debug-overmind-lambda.sh
+```
+
 ## Onboarding
 
 The default swarm starts Drones as real unapproved devices. They know the Overmind URL, submit a pending request, and show up in Overmind as **Psionic connection detected**. The Overlord approves them from the Drones page.
