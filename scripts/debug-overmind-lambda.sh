@@ -240,7 +240,73 @@ for fn in "${lambda_functions[@]}"; do
   run "lambda configuration ${fn}" aws_json lambda get-function-configuration --function-name "${fn}"
   run "lambda code ${fn}" aws_json lambda get-function --function-name "${fn}" --query 'Code'
   run "lambda recent logs ${fn}" aws logs tail "/aws/lambda/${fn}" --region "${AWS_REGION}" --since "${SINCE}" --format "${LOG_FORMAT}"
+  run "lambda log groups ${fn}" aws_json logs describe-log-groups --log-group-name-prefix "/aws/lambda/${fn}"
 done
+
+# Extract ECR repository name from any of the resolved image URIs and inspect the container images
+ecr_repo_name=""
+for fn in "${lambda_functions[@]}"; do
+  code_file="$(ls "${RUN_DIR}"/*-lambda-code-*.log 2>/dev/null | head -n 1)"
+  if [[ -n "${code_file}" ]]; then
+    code_text=$(grep -o '"ResolvedImageUri"[[:space:]]*:[[:space:]]*"[^"]*"' "${code_file}" | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/')
+    if [[ -n "${code_text}" && "${code_text}" != "null" ]]; then
+      # Handle both tag-based (repo:tag) and digest-based (repo@sha256:digest) URIs
+      ecr_repo_name=$(echo "${code_text}" | sed -E 's|^[0-9]+\.dkr\.ecr\.[^/]+/||; s/[@:].*$//')
+      break
+    fi
+  fi
+done
+
+if [[ -n "${ecr_repo_name}" ]]; then
+  section "container image inspection"
+  next_section_file container_file "container image inspection"
+
+  {
+    echo "=== ECR Repository Name: ${ecr_repo_name} ==="
+    aws_json ecr describe-repositories --repository-names "${ecr_repo_name}" 2>/dev/null || echo "Could not describe ECR repository"
+  } >"${container_file}" 2>&1 || true
+
+  # Inspect each Lambda function's container image
+  for fn in "${lambda_functions[@]}"; do
+    code_file="$(ls "${RUN_DIR}"/*-lambda-code-*.log 2>/dev/null | grep -i "${fn}" | head -n 1 || true)"
+    resolved_uri=""
+    image_id_arg=""
+    if [[ -n "${code_file}" ]]; then
+      resolved_uri=$(grep -o '"ResolvedImageUri"[[:space:]]*:[[:space:]]*"[^"]*"' "${code_file}" | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/')
+    fi
+    if [[ -n "${resolved_uri}" && "${resolved_uri}" != "null" ]]; then
+      # Handle both tag-based (repo:tag) and digest-based (repo@sha256:digest) URIs
+      if echo "${resolved_uri}" | grep -q '@'; then
+        image_digest="${resolved_uri#*@}"
+        image_id_arg="--image-ids imageDigest=${image_digest}"
+        image_summary="${resolved_uri#*@}"
+      else
+        image_tag="${resolved_uri##*:}"
+        image_id_arg="--image-ids imageTag=${image_tag}"
+        image_summary="tag=${image_tag}"
+      fi
+      {
+        echo "=== Container image for ${fn} ==="
+        echo "Image URI: ${resolved_uri}"
+        echo ""
+        echo "--- Image Manifest ---"
+        eval aws_json ecr batch-get-image --repository-name "${ecr_repo_name}" "${image_id_arg}" --accepted-media-types "application/vnd.docker.distribution.manifest.v2+json" 2>/dev/null || echo "Could not get image manifest"
+        echo ""
+        echo "--- Image Scan Findings ---"
+        eval aws_json ecr describe-image-scan-findings --repository-name "${ecr_repo_name}" "${image_id_arg}" 2>/dev/null || echo "No scan findings available"
+        echo ""
+        echo "--- Image Layers ---"
+        eval aws ecr --region '"${AWS_REGION}"' batch-get-image --repository-name '"${ecr_repo_name}"' "${image_id_arg}" --query 'images[0].imageManifest' --output text 2>/dev/null | python3 -c "
+import json, sys
+manifest = json.loads(sys.stdin.read())
+for i, layer in enumerate(manifest.get('layers', [])):
+    print(f'  Layer {i}: digest={layer[\"digest\"]} size={layer[\"size\"]} mediaType={layer.get(\"mediaType\", \"unknown\")}')
+" 2>/dev/null || echo "Could not parse image layers"
+      } >>"${container_file}"
+    fi
+  done
+  cat "${container_file}"
+fi
 
 run_shell "lambda image and env summary" "python3 - '${RUN_DIR}' <<'PY'
 import glob, json, os, sys
