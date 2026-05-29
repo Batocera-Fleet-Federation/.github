@@ -20,6 +20,14 @@ MAX_BIOS_FILES="4"
 DRONE_COUNT="4"
 NORMALIZED_SWARM_ENV_FILE=""
 export OVERMIND_VERSION="${OVERMIND_VERSION:-local:swarm}"
+export USE_FAKE_DATA="${USE_FAKE_DATA:-false}"
+export POSTGRES_CONTAINER_NAME="${POSTGRES_CONTAINER_NAME:-bff-postgres}"
+export POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:16-alpine}"
+export POSTGRES_PORT="${POSTGRES_PORT:-55432}"
+export POSTGRES_USER="${POSTGRES_USER:-overmind}"
+export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-overmind}"
+export POSTGRES_DB="${POSTGRES_DB:-overmind}"
+export OVERMIND_DATABASE_URL="${OVERMIND_DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}}"
 
 URLS=(
   "https://bff-overmind:8000"
@@ -38,12 +46,12 @@ Options:
   --import-data    Run .github/scripts/import-batocera-test-data.sh before startup.
   --reset-data     Regenerate .github/generated per-Drone ROM data from scratch.
   --seed VALUE     Use deterministic randomized per-Drone ROM layout.
-  --min-roms-per-system VALUE
-  --max-roms-per-system VALUE
-  --min-bios-files VALUE
-  --max-bios-files VALUE
-  --drone-count VALUE
-  --help, -h       Show this help.
+
+Defaults:
+  USE_FAKE_DATA=false
+  POSTGRES_IMAGE=${POSTGRES_IMAGE}
+  POSTGRES_DB=${POSTGRES_DB}
+  OVERMIND_DATABASE_URL=${OVERMIND_DATABASE_URL}
 EOF
 }
 
@@ -337,6 +345,12 @@ main() {
   generate_swarm_rom_data
   provision_swarm_mtls_certs
   update_hosts_from_urls
+
+  echo "Swarm runtime configuration:"
+  echo "  USE_FAKE_DATA=${USE_FAKE_DATA}"
+  echo "  POSTGRES_IMAGE=${POSTGRES_IMAGE}"
+  echo "  POSTGRES_DB=${POSTGRES_DB}"
+  echo "  OVERMIND_DATABASE_URL=${OVERMIND_DATABASE_URL}"
 
   echo "Starting local Batocera Fleet Federation swarm..."
   if [[ "${#compose_args[@]}" -gt 0 ]]; then

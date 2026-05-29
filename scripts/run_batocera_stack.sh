@@ -16,6 +16,10 @@ else
   echo "No local environment file found at: $ENV_LOCAL_FILE"
 fi
 
+# Default to real local data/database behavior unless explicitly overridden.
+USE_FAKE_DATA="${USE_FAKE_DATA:-false}"
+export USE_FAKE_DATA
+
 OVERMIND_DIR="$ROOT_DIR/batocera.overmind"
 DRONE_DIR="$ROOT_DIR/batocera.drone"
 OVERMIND_PYTHON_BIN="$OVERMIND_DIR/.venv/bin/python"
@@ -38,22 +42,36 @@ DRONE_TLS_CERT_FILE="${DRONE_TLS_CERT_FILE:-$LOCAL_DRONE_CERT_DIR/drone.crt}"
 DRONE_CERT_FILE="${DRONE_CERT_FILE:-$DRONE_TLS_CERT_FILE}"
 DRONE_KEY_FILE="${DRONE_KEY_FILE:-$DRONE_TLS_KEY_FILE}"
 DRONE_FALLBACK_REQUIREMENTS="${DRONE_FALLBACK_REQUIREMENTS:-fastapi uvicorn[standard] pydantic pydantic-settings python-multipart requests aiofiles}"
+KEEP_DATABASE="${KEEP_DATABASE:-false}"
 
 OVERMIND_PID=""
 DRONE_PID=""
+POSTGRES_CONTAINER_NAME="${POSTGRES_CONTAINER_NAME:-batocera-postgres}"
+POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:16-alpine}"
+POSTGRES_PORT="${OVERMIND_POSTGRES_PORT:-5432}"
+POSTGRES_USER="${OVERMIND_POSTGRES_USER:-overmind}"
+POSTGRES_PASSWORD="${OVERMIND_POSTGRES_PASSWORD:-overmind}"
+POSTGRES_DB="${OVERMIND_POSTGRES_DB:-overmind}"
+POSTGRES_DATA_VOLUME="${POSTGRES_DATA_VOLUME:-batocera-postgres-data}"
+OVERMIND_DATABASE_URL="${OVERMIND_DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${POSTGRES_PORT}/${POSTGRES_DB}}"
+export OVERMIND_DATABASE_URL
 
 usage() {
   cat <<USAGE
-Usage: $(basename "$0") [--kill-existing]
+Usage: $(basename "$0") [--kill-existing] [--keep-database]
 
 Starts both local Batocera apps:
   Overmind: https://localhost:${OVERMIND_PORT}
   Drone:    https://localhost:${DRONE_PORT}
 
-Fake data is off by default. Set USE_FAKE_DATA=true to enable demo data.
+Fake data is off by default: USE_FAKE_DATA=false. Set USE_FAKE_DATA=true to enable demo data.
+
+Local PostgreSQL is started in Docker by default and Overmind is pointed at it with:
+  OVERMIND_DATABASE_URL=${OVERMIND_DATABASE_URL}
 
 Options:
   --kill-existing   Kill current listeners on ${OVERMIND_PORT}/${DRONE_PORT} before starting.
+  --keep-database   Leave the local PostgreSQL container running on script exit.
 
 The script creates or repairs missing .venv directories, installs dependencies, installs Drone fallback dependencies when needed, verifies imports, and generates local TLS certs when needed.
 USAGE
@@ -134,10 +152,65 @@ stop_process_tree() {
   fi
 }
 
+ensure_postgres_container() {
+  require_command docker
+
+  echo "Pulling PostgreSQL image: ${POSTGRES_IMAGE}..."
+  docker pull "${POSTGRES_IMAGE}" >/dev/null 2>&1
+
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${POSTGRES_CONTAINER_NAME}$"; then
+    echo "PostgreSQL container '${POSTGRES_CONTAINER_NAME}' is already running."
+    echo "Using Overmind database URL: ${OVERMIND_DATABASE_URL}"
+    return 0
+  fi
+
+  if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${POSTGRES_CONTAINER_NAME}$"; then
+    echo "Removing stopped PostgreSQL container '${POSTGRES_CONTAINER_NAME}'..."
+    docker rm "${POSTGRES_CONTAINER_NAME}" >/dev/null
+  fi
+
+  echo "Starting PostgreSQL container '${POSTGRES_CONTAINER_NAME}' on port ${POSTGRES_PORT}..."
+  docker volume create "${POSTGRES_DATA_VOLUME}" >/dev/null
+
+  docker run -d \
+    --name "${POSTGRES_CONTAINER_NAME}" \
+    -e POSTGRES_USER="${POSTGRES_USER}" \
+    -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+    -e POSTGRES_DB="${POSTGRES_DB}" \
+    -p "${POSTGRES_PORT}:5432" \
+    -v "${POSTGRES_DATA_VOLUME}:/var/lib/postgresql/data" \
+    "${POSTGRES_IMAGE}" >/dev/null
+
+  echo "Waiting for PostgreSQL to be ready..."
+  local timeout=30
+  local elapsed=0
+  until docker exec "${POSTGRES_CONTAINER_NAME}" pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" >/dev/null 2>&1; do
+    if (( elapsed >= timeout )); then
+      echo "PostgreSQL did not become ready within ${timeout}s." >&2
+      docker logs "${POSTGRES_CONTAINER_NAME}" --tail 10 >&2
+      exit 1
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  echo "PostgreSQL is ready."
+  echo "Using Overmind database URL: ${OVERMIND_DATABASE_URL}"
+}
+
 cleanup() {
   trap - INT TERM EXIT
   echo
   echo "Stopping Batocera stack..."
+
+  if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${POSTGRES_CONTAINER_NAME}$"; then
+    if [[ "$KEEP_DATABASE" == "true" ]]; then
+      echo "Leaving PostgreSQL container '${POSTGRES_CONTAINER_NAME}' running because --keep-database was specified. Stop it manually with: docker stop ${POSTGRES_CONTAINER_NAME}"
+    else
+      echo "Removing PostgreSQL container '${POSTGRES_CONTAINER_NAME}'..."
+      docker rm -f "${POSTGRES_CONTAINER_NAME}" >/dev/null 2>&1 || true
+    fi
+  fi
+
   stop_process_tree "Overmind" "$OVERMIND_PID"
   stop_process_tree "Drone" "$DRONE_PID"
   wait "$OVERMIND_PID" "$DRONE_PID" >/dev/null 2>&1 || true
@@ -256,7 +329,7 @@ ensure_runtime_envs() {
   "$OVERMIND_PYTHON_BIN" -m pip install "uvicorn[standard]"
 
   verify_python_module "Overmind" "$OVERMIND_PYTHON_BIN" "uvicorn"
-  PYTHONPATH="$OVERMIND_DIR/src" verify_python_module "Overmind" "$OVERMIND_PYTHON_BIN" "overmind.main"
+  PYTHONPATH="$OVERMIND_DIR/src" OVERMIND_DATABASE_URL="$OVERMIND_DATABASE_URL" USE_FAKE_DATA="$USE_FAKE_DATA" verify_python_module "Overmind" "$OVERMIND_PYTHON_BIN" "overmind.main"
 
   verify_python_module "Drone" "$DRONE_PYTHON_BIN" "fastapi"
   verify_python_module "Drone" "$DRONE_PYTHON_BIN" "uvicorn"
@@ -316,6 +389,9 @@ for arg in "$@"; do
     --kill-existing)
       KILL_EXISTING=true
       ;;
+    --keep-database)
+      KEEP_DATABASE=true
+      ;;
     -h|--help)
       usage
       exit 0
@@ -331,6 +407,7 @@ done
 require_file "$DRONE_DIR/app/main.py"
 require_file "$OVERMIND_DIR/src/overmind/main.py"
 provision_local_drone_mtls_certs
+ensure_postgres_container
 ensure_runtime_envs
 require_file "$OVERMIND_PYTHON_BIN"
 require_file "$DRONE_PYTHON_BIN"
@@ -368,7 +445,7 @@ echo "Starting Batocera Drone on https://localhost:${DRONE_PORT}"
   DRONE_KEY_FILE="$DRONE_KEY_FILE" \
   TLS_KEY_FILE="$DRONE_TLS_KEY_FILE" \
   TLS_CERT_FILE="$DRONE_TLS_CERT_FILE" \
-  USE_FAKE_DATA="${USE_FAKE_DATA:-false}" \
+  USE_FAKE_DATA="$USE_FAKE_DATA" \
   USERDATA_ROOT="$DRONE_FAKE_USERDATA_ROOT" \
   ROMS_ROOT="$DRONE_FAKE_USERDATA_ROOT/roms" \
   BIOS_ROOT="$DRONE_FAKE_USERDATA_ROOT/bios" \
@@ -388,7 +465,8 @@ echo "Starting Batocera Overmind on https://localhost:${OVERMIND_PORT}"
 (
   cd "$OVERMIND_DIR"
   PYTHONPATH="$OVERMIND_DIR/src" \
-  USE_FAKE_DATA="${USE_FAKE_DATA:-false}" \
+  USE_FAKE_DATA="$USE_FAKE_DATA" \
+  OVERMIND_DATABASE_URL="$OVERMIND_DATABASE_URL" \
   OVERMIND_PORT="$OVERMIND_PORT" \
   OVERMIND_VERSION="${OVERMIND_VERSION:-local:console}" \
   EMAIL_PROVIDER="${EMAIL_PROVIDER:-}" \
@@ -409,9 +487,17 @@ cat <<INFO
 Batocera stack is starting.
   Overmind: https://localhost:${OVERMIND_PORT}
   Drone:    https://localhost:${DRONE_PORT}
-  Fake data: ${USE_FAKE_DATA:-false}
+  Fake data: ${USE_FAKE_DATA}
   Drone fake data root: ${DRONE_FAKE_USERDATA_ROOT}
   Overmind TLS cert: ${OVERMIND_TLS_CERT_FILE}
+
+PostgreSQL:
+  Container: ${POSTGRES_CONTAINER_NAME}
+  Image:     ${POSTGRES_IMAGE}
+  Port:      ${POSTGRES_PORT}
+  Volume:    ${POSTGRES_DATA_VOLUME}
+  Database:  ${OVERMIND_DATABASE_URL}
+  Keep DB:   ${KEEP_DATABASE}
 
 Overmind email:
   Provider: ${EMAIL_PROVIDER:-"(not set)"}

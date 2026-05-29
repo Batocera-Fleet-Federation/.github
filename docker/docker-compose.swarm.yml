@@ -45,6 +45,23 @@ x-drone-common: &drone-common
         memory: 384M
 
 services:
+  postgres:
+    image: "${POSTGRES_IMAGE:-postgres:16-alpine}"
+    container_name: "${POSTGRES_CONTAINER_NAME:-bff-postgres}"
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-overmind}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-overmind}"
+      POSTGRES_DB: "${POSTGRES_DB:-overmind}"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-overmind} -d ${POSTGRES_DB:-overmind}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   overmind:
     image: ghcr.io/batocera-fleet-federation/batocera-overmind:local
     build:
@@ -53,6 +70,7 @@ services:
       - ${SWARM_CONTAINER_ENV_FILE:-../scripts/.env.swarm}
     environment:
       USE_FAKE_DATA: "${USE_FAKE_DATA:-false}"
+      OVERMIND_DATABASE_URL: "${OVERMIND_DATABASE_URL:-postgresql://overmind:overmind@postgres:5432/overmind}"
       SWARM_OFFLINE_THRESHOLD_SECONDS: "180"
       OVERMIND_VERSION: "${OVERMIND_VERSION:-}"
     ports:
@@ -61,6 +79,9 @@ services:
       default:
         aliases:
           - bff-overmind
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-k", "-f", "https://localhost:8000"]
       interval: 10s
@@ -152,6 +173,7 @@ services:
           - bff-drone-d
 
 volumes:
+  postgres-data:
   drone-a-data:
   drone-b-data:
   drone-c-data:
