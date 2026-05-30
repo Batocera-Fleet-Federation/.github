@@ -71,7 +71,9 @@ Local PostgreSQL is started in Docker by default and Overmind is pointed at it w
 
 Options:
   --kill-existing   Kill current listeners on ${OVERMIND_PORT}/${DRONE_PORT} before starting.
-  --keep-database   Leave the local PostgreSQL container running on script exit.
+  --keep-database   Leave the local PostgreSQL container and volume on script exit.
+
+By default the local PostgreSQL container and Docker volume '${POSTGRES_DATA_VOLUME}' are deleted on shutdown.
 
 The script creates or repairs missing .venv directories, installs dependencies, installs Drone fallback dependencies when needed, verifies imports, and generates local TLS certs when needed.
 USAGE
@@ -204,10 +206,17 @@ cleanup() {
 
   if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${POSTGRES_CONTAINER_NAME}$"; then
     if [[ "$KEEP_DATABASE" == "true" ]]; then
-      echo "Leaving PostgreSQL container '${POSTGRES_CONTAINER_NAME}' running because --keep-database was specified. Stop it manually with: docker stop ${POSTGRES_CONTAINER_NAME}"
+      echo "Leaving PostgreSQL container '${POSTGRES_CONTAINER_NAME}' running because KEEP_DATABASE=true. Stop it manually with: docker stop ${POSTGRES_CONTAINER_NAME}"
     else
       echo "Removing PostgreSQL container '${POSTGRES_CONTAINER_NAME}'..."
       docker rm -f "${POSTGRES_CONTAINER_NAME}" >/dev/null 2>&1 || true
+    fi
+  fi
+
+  if [[ "$KEEP_DATABASE" != "true" ]]; then
+    if docker volume ls --format '{{.Name}}' 2>/dev/null | grep -q "^${POSTGRES_DATA_VOLUME}$"; then
+      echo "Removing PostgreSQL volume '${POSTGRES_DATA_VOLUME}'..."
+      docker volume rm "${POSTGRES_DATA_VOLUME}" >/dev/null 2>&1 || true
     fi
   fi
 
