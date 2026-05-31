@@ -213,6 +213,12 @@ variable "lambda_reserved_concurrency" {
   default     = null
 }
 
+variable "lambda_scheduled_reserved_concurrency" {
+  description = "Reserved concurrency for the scheduled maintenance Lambda so background jobs cannot starve API Lambdas."
+  type        = number
+  default     = 1
+}
+
 variable "lambda_create_nat_gateway" {
   description = "Create a NAT Gateway for Lambda outbound internet access to SMTP, OAuth providers, webhooks, and other public APIs."
   type        = bool

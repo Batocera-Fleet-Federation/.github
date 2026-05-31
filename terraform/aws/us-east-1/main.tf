@@ -657,14 +657,15 @@ resource "aws_lambda_function" "api" {
 }
 
 resource "aws_lambda_function" "scheduled" {
-  count         = local.lambda_enabled ? 1 : 0
-  function_name = "${var.project_name}-${var.environment}-scheduled"
-  role          = aws_iam_role.lambda[0].arn
-  package_type  = "Image"
-  image_uri     = local.lambda_image
-  architectures = var.lambda_architectures
-  memory_size   = var.lambda_medium_memory_mb
-  timeout       = 300
+  count                          = local.lambda_enabled ? 1 : 0
+  function_name                  = "${var.project_name}-${var.environment}-scheduled"
+  role                           = aws_iam_role.lambda[0].arn
+  package_type                   = "Image"
+  image_uri                      = local.lambda_image
+  architectures                  = var.lambda_architectures
+  memory_size                    = var.lambda_medium_memory_mb
+  timeout                        = 300
+  reserved_concurrent_executions = var.lambda_scheduled_reserved_concurrency
 
   image_config {
     command = ["overmind.lambda_handler.scheduled_handler"]
@@ -794,6 +795,10 @@ resource "aws_cloudwatch_event_target" "scheduled" {
   rule     = aws_cloudwatch_event_rule.scheduled[each.key].name
   arn      = aws_lambda_function.scheduled[0].arn
   input    = jsonencode({ job = each.key })
+
+  retry_policy {
+    maximum_retry_attempts = 0
+  }
 }
 
 resource "aws_lambda_permission" "eventbridge" {
