@@ -280,6 +280,17 @@ resource "aws_security_group_rule" "db_from_public_admin" {
   cidr_blocks       = [local.db_public_access_cidr]
 }
 
+resource "aws_security_group_rule" "db_from_lambda_nat_public_rds" {
+  count             = local.lambda_enabled && var.lambda_create_nat_gateway && local.db_public_access_enabled && !var.enable_rds_proxy ? 1 : 0
+  type              = "ingress"
+  description       = "PostgreSQL from Lambda NAT when RDS resolves publicly"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  security_group_id = aws_security_group.db.id
+  cidr_blocks       = ["${aws_eip.nat[0].public_ip}/32"]
+}
+
 resource "aws_security_group" "vpc_endpoints" {
   count       = local.lambda_enabled ? 1 : 0
   name        = "${var.project_name}-${var.environment}-vpc-endpoints"
@@ -788,6 +799,7 @@ resource "aws_cloudwatch_event_rule" "scheduled" {
   name                = "${var.project_name}-${var.environment}-${each.key}"
   description         = "Run Overmind ${each.key} maintenance job"
   schedule_expression = each.value
+  state               = var.lambda_scheduled_rules_enabled ? "ENABLED" : "DISABLED"
 }
 
 resource "aws_cloudwatch_event_target" "scheduled" {

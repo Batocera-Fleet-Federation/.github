@@ -66,18 +66,23 @@ smtp_starttls      = true
 # GOOGLE_CLIENT_ID/SECRET, and GITHUB_CLIENT_ID/SECRET directly in that secret.
 # Terraform is configured to preserve its existing payload on later applies.
 
-ecr_repository_name       = "batocera-overmind"
-instance_type             = "t3.micro"
-db_instance_class         = "db.t3.micro"
-availability_zones        = ["us-east-1a", "us-east-1b"]
-public_subnet_cidrs       = ["10.42.10.0/24", "10.42.20.0/24"]
-private_subnet_cidrs      = ["10.42.110.0/24", "10.42.120.0/24"]
-ami_id                    = ""
-lambda_create_nat_gateway = true
+ecr_repository_name        = "batocera-overmind"
+instance_type              = "t3.micro"
+db_instance_class          = "db.t3.micro"
+availability_zones         = ["us-east-1a", "us-east-1b"]
+public_subnet_cidrs        = ["10.42.10.0/24", "10.42.20.0/24"]
+private_subnet_cidrs       = ["10.42.110.0/24", "10.42.120.0/24"]
+ami_id                     = ""
+lambda_create_nat_gateway  = true
+lambda_low_timeout_seconds = 30
+
+# Keep maintenance jobs paused until the DB has enough memory headroom and
+# the scheduled Lambda image with controlled startup failures is deployed.
+lambda_scheduled_rules_enabled = false
 
 # Optional temporary RDS admin access. Set to your current public IP or CIDR
 # such as "203.0.113.10" or "203.0.113.10/32"; leave empty to keep RDS private.
-db_public_access_cidr = "72.176.228.250"
+db_public_access_cidr = "209.55.104.193"
 
 # Optional break-glass SSH. Prefer SSM Session Manager.
 admin_ssh_cidr = ""

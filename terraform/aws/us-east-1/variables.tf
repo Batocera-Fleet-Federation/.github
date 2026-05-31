@@ -219,6 +219,12 @@ variable "lambda_scheduled_reserved_concurrency" {
   default     = null
 }
 
+variable "lambda_scheduled_rules_enabled" {
+  description = "Enable EventBridge scheduled maintenance rules. Disable to stop background jobs during DB or concurrency recovery."
+  type        = bool
+  default     = true
+}
+
 variable "lambda_create_nat_gateway" {
   description = "Create a NAT Gateway for Lambda outbound internet access to SMTP, OAuth providers, webhooks, and other public APIs."
   type        = bool
