@@ -797,7 +797,8 @@ resource "aws_cloudwatch_event_target" "scheduled" {
   input    = jsonencode({ job = each.key })
 
   retry_policy {
-    maximum_retry_attempts = 0
+    maximum_event_age_in_seconds = 60
+    maximum_retry_attempts       = 0
   }
 }
 

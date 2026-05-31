@@ -214,9 +214,9 @@ variable "lambda_reserved_concurrency" {
 }
 
 variable "lambda_scheduled_reserved_concurrency" {
-  description = "Reserved concurrency for the scheduled maintenance Lambda so background jobs cannot starve API Lambdas."
+  description = "Optional reserved concurrency for the scheduled maintenance Lambda. Null leaves it unreserved for low-concurrency AWS accounts."
   type        = number
-  default     = 1
+  default     = null
 }
 
 variable "lambda_create_nat_gateway" {
