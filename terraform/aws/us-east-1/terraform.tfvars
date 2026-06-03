@@ -79,7 +79,7 @@ lambda_low_timeout_seconds = 30
 # Keep maintenance jobs paused until the DB has enough memory headroom and
 # the scheduled Lambda image with controlled startup failures is deployed.
 lambda_scheduled_rules_enabled        = true
-lambda_scheduled_reserved_concurrency = 1
+lambda_scheduled_reserved_concurrency = 0
 
 # Optional temporary RDS admin access. Set to your current public IP or CIDR
 # such as "203.0.113.10" or "203.0.113.10/32"; leave empty to keep RDS private.
