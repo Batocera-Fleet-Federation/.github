@@ -397,3 +397,15 @@ variable "runtime_secret_extra_env" {
   default     = {}
   sensitive   = true
 }
+
+variable "enable_elasticache" {
+  description = "Create an ElastiCache Redis cluster for application caching. Requires lambda_create_nat_gateway = true (private subnets must exist)."
+  type        = bool
+  default     = true
+}
+
+variable "elasticache_node_type" {
+  description = "ElastiCache node instance type."
+  type        = string
+  default     = "cache.t3.micro"
+}

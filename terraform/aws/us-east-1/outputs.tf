@@ -98,6 +98,11 @@ output "lambda_database_endpoint" {
   value       = var.enable_lambda_overmind ? local.lambda_db_host : null
 }
 
+output "redis_endpoint" {
+  description = "ElastiCache Redis endpoint for application caching."
+  value       = var.enable_elasticache ? aws_elasticache_cluster.overmind[0].cache_nodes[0].address : null
+}
+
 output "api_custom_domain_targets" {
   description = "API Gateway custom domain regional targets by hostname."
   value = var.enable_lambda_overmind ? {

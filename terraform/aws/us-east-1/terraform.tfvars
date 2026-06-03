@@ -95,3 +95,7 @@ github_branch = "main"
 
 # Optional: creates private CA material in Secrets Manager and Terraform state.
 enable_internal_ca_secret = true
+
+# ElastiCache Redis for application-layer caching (requires lambda_create_nat_gateway = true).
+enable_elasticache    = true
+elasticache_node_type = "cache.t3.micro"

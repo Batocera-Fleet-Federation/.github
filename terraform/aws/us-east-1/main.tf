@@ -360,6 +360,57 @@ resource "aws_vpc_endpoint" "secretsmanager" {
   private_dns_enabled = true
 }
 
+# ── ElastiCache (Redis) ──────────────────────────────────────────────────────
+
+resource "aws_security_group" "elasticache" {
+  count       = var.enable_elasticache ? 1 : 0
+  name        = "${var.project_name}-${var.environment}-elasticache"
+  description = "Redis access from Overmind Lambda functions"
+  vpc_id      = aws_vpc.overmind.id
+}
+
+resource "aws_security_group_rule" "elasticache_from_lambda" {
+  count                    = var.enable_elasticache ? 1 : 0
+  type                     = "ingress"
+  description              = "Redis from Lambda"
+  from_port                = 6379
+  to_port                  = 6379
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.elasticache[0].id
+  source_security_group_id = aws_security_group.lambda[0].id
+}
+
+resource "aws_security_group_rule" "elasticache_egress" {
+  count             = var.enable_elasticache ? 1 : 0
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.elasticache[0].id
+}
+
+resource "aws_elasticache_subnet_group" "overmind" {
+  count      = var.enable_elasticache ? 1 : 0
+  name       = "${var.project_name}-${var.environment}-cache"
+  subnet_ids = aws_subnet.private[*].id
+  tags       = { Name = "${var.project_name}-${var.environment}-cache" }
+}
+
+resource "aws_elasticache_cluster" "overmind" {
+  count                = var.enable_elasticache ? 1 : 0
+  cluster_id           = "${var.project_name}-${var.environment}-cache"
+  engine               = "redis"
+  node_type            = var.elasticache_node_type
+  num_cache_nodes      = 1
+  parameter_group_name = "default.redis7"
+  engine_version       = "7.1"
+  port                 = 6379
+  subnet_group_name    = aws_elasticache_subnet_group.overmind[0].name
+  security_group_ids   = [aws_security_group.elasticache[0].id]
+  tags                 = { Name = "${var.project_name}-${var.environment}-cache" }
+}
+
 resource "aws_secretsmanager_secret" "db_credentials" {
   count                   = local.rds_proxy_enabled ? 1 : 0
   name                    = "${var.project_name}/${var.environment}/db-credentials"
@@ -652,6 +703,8 @@ resource "aws_lambda_function" "api" {
       USE_FAKE_DATA                   = tostring(var.use_fake_data)
       }, var.enable_internal_ca_secret ? {
       OVERMIND_INTERNAL_CA_SECRET_NAME = aws_secretsmanager_secret.internal_ca[0].name
+    } : {}, var.enable_elasticache ? {
+      OVERMIND_REDIS_URL = "redis://${aws_elasticache_cluster.overmind[0].cache_nodes[0].address}:6379"
     } : {})
   }
 
@@ -693,6 +746,8 @@ resource "aws_lambda_function" "scheduled" {
       USE_FAKE_DATA                   = tostring(var.use_fake_data)
       }, var.enable_internal_ca_secret ? {
       OVERMIND_INTERNAL_CA_SECRET_NAME = aws_secretsmanager_secret.internal_ca[0].name
+    } : {}, var.enable_elasticache ? {
+      OVERMIND_REDIS_URL = "redis://${aws_elasticache_cluster.overmind[0].cache_nodes[0].address}:6379"
     } : {})
   }
 
