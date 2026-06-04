@@ -1,7 +1,7 @@
 aws_region           = "us-east-1"
 project_name         = "bff-overmind"
 environment          = "prod"
-overmind_version     = "v0.0.16-alpha"
+overmind_version     = "v0.1.0"
 domain_name          = "batocera-swarm.com"
 overmind_subdomain   = "www"
 overmind_domain_name = ""

@@ -76,7 +76,6 @@ locals {
     { for route in local.lambda_route_tiers.medium : route => "medium" }
   )
   scheduled_jobs = {
-    public-reachability   = "rate(1 minute)"
     notification-delivery = "rate(5 minutes)"
     device-status         = "rate(5 minutes)"
   }
