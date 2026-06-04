@@ -27,10 +27,10 @@ The integration tests can also run against existing endpoints:
 ```bash
 USE_EXISTING_SWARM=true \
 OVERMIND_URL=http://overmind.example:8000 \
-DRONE_A_URL=https://drone-a.example:8443 \
-DRONE_B_URL=https://drone-b.example:8443 \
-DRONE_C_URL=https://drone-c.example:8443 \
-DRONE_D_URL=https://drone-d.example:8443 \
+DRONE_A_URL=https://drone-a.example \
+DRONE_B_URL=https://drone-b.example \
+DRONE_C_URL=https://drone-c.example \
+DRONE_D_URL=https://drone-d.example \
 .github/scripts/run-integration-tests.sh
 ```
 
