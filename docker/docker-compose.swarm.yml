@@ -97,6 +97,8 @@ services:
       <<: *drone-env
       DRONE_DEVICE_ID: bff-drone-a
       HOSTNAME_OVERRIDE: bff-drone-a
+      DRONE_PUBLIC_IP_OVERRIDE: bff-drone-a
+      DRONE_ADVERTISED_API_PORT: 8443
     volumes:
       - ../data:/batocera-test-data:ro
       - drone-a-data:/userdata
@@ -118,6 +120,9 @@ services:
       <<: *drone-env
       DRONE_DEVICE_ID: bff-drone-b
       HOSTNAME_OVERRIDE: bff-drone-b
+      DRONE_PUBLIC_IP_OVERRIDE: bff-drone-b
+      DRONE_ADVERTISED_API_PORT: 8444
+      DRONE_COMPAT_HTTPS_PORTS: 8444
     volumes:
       - ../data:/batocera-test-data:ro
       - drone-b-data:/userdata
@@ -139,6 +144,9 @@ services:
       <<: *drone-env
       DRONE_DEVICE_ID: bff-drone-c
       HOSTNAME_OVERRIDE: bff-drone-c
+      DRONE_PUBLIC_IP_OVERRIDE: bff-drone-c
+      DRONE_ADVERTISED_API_PORT: 8445
+      DRONE_COMPAT_HTTPS_PORTS: 8445
     volumes:
       - ../data:/batocera-test-data:ro
       - drone-c-data:/userdata
@@ -160,6 +168,9 @@ services:
       <<: *drone-env
       DRONE_DEVICE_ID: bff-drone-d
       HOSTNAME_OVERRIDE: bff-drone-d
+      DRONE_PUBLIC_IP_OVERRIDE: bff-drone-d
+      DRONE_ADVERTISED_API_PORT: 8446
+      DRONE_COMPAT_HTTPS_PORTS: 8446
     volumes:
       - ../data:/batocera-test-data:ro
       - drone-d-data:/userdata
