@@ -78,5 +78,6 @@ locals {
   scheduled_jobs = {
     notification-delivery = "rate(5 minutes)"
     device-status         = "rate(5 minutes)"
+    public-reachability   = "rate(1 minute)"
   }
 }
