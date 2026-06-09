@@ -7,34 +7,24 @@ CREDENTIALS_FILE="${BFF_CREDENTIALS_FILE:-${FEDERATION_ROOT}/.github/.credential
 OUTPUT_ROOT="${OUTPUT_ROOT:-${SCRIPT_DIR}/issue-triage-output}"
 OWNER="${GITHUB_OWNER:-Batocera-Fleet-Federation}"
 EXECUTE=false
-ALL_OPEN=false
-LIMIT=100
-REPO_FILTER=""
-ISSUE_NUMBER=""
+MULTI_PROMPT=false
+REPOS=(".github" "batocera.drone" "batocera.overmind")
 declare -a ISSUE_REFS=()
+declare -a PROMPT_FILES=()
 
 usage() {
   cat <<'EOF'
-Usage:
-  .github/scripts/triage-github-issues.sh [options] <issue-ref>...
-  .github/scripts/triage-github-issues.sh --repo <drone|overmind> --issue <number>
-  .github/scripts/triage-github-issues.sh --all-open [--repo <drone|overmind>]
-
-Issue refs:
-  https://github.com/Batocera-Fleet-Federation/batocera.drone/issues/123
-  batocera.drone#123
-  drone#123
+Usage: .github/scripts/triage-github-issues.sh [options]
 
 Options:
-  --execute        Launch one interactive Claude Code session per issue.
-  --all-open       Generate prompts for open issues in both supported repos.
-  --repo NAME      Restrict --all-open, or pair with --issue.
-  --issue NUMBER   Select one issue when used with --repo.
-  --limit NUMBER   Maximum issues returned by --all-open (default: 100).
+  --execute        Launch Claude Code with all issues in one prompt.
+  --multi-prompt   Keep separate prompts instead of building one combined prompt.
   --output DIR     Override the generated artifact directory.
   -h, --help       Show this help.
 
-By default the script only generates issue JSON and Claude prompt files.
+Fetches every open issue assigned to someone in the .github, batocera.drone,
+and batocera.overmind repositories. By default, the script generates one
+combined prompt. --execute launches Claude with that combined prompt.
 EOF
 }
 
@@ -45,29 +35,6 @@ die() {
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
-}
-
-normalize_repo() {
-  case "$1" in
-    drone|batocera.drone) echo "batocera.drone" ;;
-    overmind|batocera.overmind) echo "batocera.overmind" ;;
-    *) die "Unsupported repository: $1" ;;
-  esac
-}
-
-parse_issue_ref() {
-  local ref="$1"
-  local repo number
-  if [[ "${ref}" =~ ^https://github\.com/${OWNER}/(batocera\.(drone|overmind))/issues/([0-9]+)(/.*)?$ ]]; then
-    repo="${BASH_REMATCH[1]}"
-    number="${BASH_REMATCH[3]}"
-  elif [[ "${ref}" =~ ^(batocera\.(drone|overmind)|drone|overmind)#([0-9]+)$ ]]; then
-    repo="$(normalize_repo "${BASH_REMATCH[1]}")"
-    number="${BASH_REMATCH[3]}"
-  else
-    die "Unsupported issue reference: ${ref}"
-  fi
-  printf '%s#%s\n' "${repo}" "${number}"
 }
 
 load_github_token() {
@@ -90,6 +57,15 @@ fetch_paginated_array() {
     "${endpoint}" | jq -s 'add // []'
 }
 
+list_assigned_issue_numbers() {
+  local repo="$1"
+  gh api --paginate \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    "repos/${OWNER}/${repo}/issues?state=open&per_page=100" |
+    jq -r '.[] | select((has("pull_request") | not) and (.assignees | length) > 0) | .number'
+}
+
 collect_issue() {
   local repo="$1"
   local number="$2"
@@ -103,6 +79,13 @@ collect_issue() {
   mkdir -p "${issue_dir}"
   echo "Fetching ${OWNER}/${repo}#${number}"
   gh api "repos/${OWNER}/${repo}/issues/${number}" >"${issue_file}"
+
+  if ! jq -e '(.assignees | type == "array" and length > 0)' "${issue_file}" >/dev/null; then
+    echo "Skipping ${OWNER}/${repo}#${number}: issue is no longer assigned."
+    rm -f "${comments_file}" "${timeline_file}" "${context_file}" "${prompt_file}"
+    return
+  fi
+
   fetch_paginated_array "repos/${OWNER}/${repo}/issues/${number}/comments?per_page=100" >"${comments_file}"
   fetch_paginated_array "repos/${OWNER}/${repo}/issues/${number}/timeline?per_page=100" >"${timeline_file}"
 
@@ -127,7 +110,8 @@ collect_issue() {
     "- URL: " + .issue.html_url + "\n" +
     "- State: `" + .issue.state + "`\n" +
     "- Author: `" + .issue.user.login + "`\n" +
-    "- Labels: " + ((.issue.labels | map(.name) | join(", ")) | text(.)) + "\n" +
+    "- Assignees: " + ((.issue.assignees | map(.login) | join(", ")) | text(.)) + "\n" +
+    "- Triage labels: " + ((.issue.labels | map(.name) | join(", ")) | text(.)) + "\n" +
     "- Title: " + .issue.title + "\n\n" +
     text(.issue.body) + "\n\n" +
     "## Comments\n\n" +
@@ -143,7 +127,7 @@ collect_issue() {
      end) + "\n\n" +
     "## Required Workflow\n\n" +
     "1. Read the relevant code, tests, repository instructions, and Claude skills across `.github`, `batocera.drone`, and `batocera.overmind`. Cross-reference behavior across repos before deciding where the fix belongs.\n" +
-    "2. Reproduce or verify the issue where practical. Distinguish confirmed facts from hypotheses.\n" +
+    "2. Use the issue labels as triage and intent context, then reproduce or verify the issue where practical. Distinguish confirmed facts from hypotheses.\n" +
     "3. Use AWS or live Drone diagnostics only when they are relevant to this issue. Never print, paste, commit, or include credentials in logs, prompts, comments, patches, or final output.\n" +
     "4. For AWS commands, use `.github/scripts/run-with-aws-credentials.sh <command>`. For broad serverless diagnostics, use `.github/scripts/run-with-aws-credentials.sh .github/scripts/debug-overmind-lambda.sh`; inspect only the relevant generated logs.\n" +
     "5. For read-only Batocera/Drone diagnostics, use `.github/scripts/debug-batocera-drone.sh`; inspect only the relevant generated logs. Do not modify or restart the remote machine unless the user explicitly approves it.\n" +
@@ -154,42 +138,53 @@ collect_issue() {
   ' "${context_file}" >"${prompt_file}"
 
   echo "Generated ${prompt_file#${FEDERATION_ROOT}/}"
+  PROMPT_FILES+=("${prompt_file}")
+}
 
-  if [[ "${EXECUTE}" == "true" ]]; then
-    echo "Launching Claude for ${repo}#${number}"
-    (
-      cd "${FEDERATION_ROOT}"
-      claude \
-        --add-dir .github \
-        --add-dir batocera.drone \
-        --add-dir batocera.overmind \
-        --name "${repo}-issue-${number}" \
-        "$(cat "${prompt_file}")"
-    )
-  fi
+launch_claude() {
+  local name="$1"
+  local prompt_file="$2"
+  (
+    cd "${FEDERATION_ROOT}"
+    claude \
+      --add-dir .github \
+      --add-dir batocera.drone \
+      --add-dir batocera.overmind \
+      --name "${name}" \
+      "$(cat "${prompt_file}")"
+  )
+}
+
+build_combined_prompt() {
+  local combined_prompt="${OUTPUT_ROOT}/claude-prompt-all-issues.md"
+  {
+    cat <<'EOF'
+# Batocera Fleet Federation Assigned Issues
+
+Work through every issue below end to end. Treat each issue as a separate
+deliverable, but cross-reference them when they overlap. Preserve each issue's
+requirements, implement and test the necessary changes, and summarize the
+result for every issue.
+
+EOF
+    for prompt_file in "${PROMPT_FILES[@]}"; do
+      printf '\n\n---\n\n'
+      cat "${prompt_file}"
+    done
+  } >"${combined_prompt}"
+  echo "${combined_prompt}"
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --execute) EXECUTE=true; shift ;;
-    --all-open) ALL_OPEN=true; shift ;;
-    --repo) [[ $# -ge 2 ]] || die "--repo requires a value"; REPO_FILTER="$(normalize_repo "$2")"; shift 2 ;;
-    --issue) [[ $# -ge 2 ]] || die "--issue requires a value"; ISSUE_NUMBER="$2"; shift 2 ;;
-    --limit) [[ $# -ge 2 ]] || die "--limit requires a value"; LIMIT="$2"; shift 2 ;;
+    --multi-prompt) MULTI_PROMPT=true; shift ;;
     --output) [[ $# -ge 2 ]] || die "--output requires a value"; OUTPUT_ROOT="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
-    --) shift; while [[ $# -gt 0 ]]; do ISSUE_REFS+=("$1"); shift; done ;;
     -*) die "Unknown option: $1" ;;
-    *) ISSUE_REFS+=("$1"); shift ;;
+    *) die "Unexpected argument: $1" ;;
   esac
 done
-
-[[ "${LIMIT}" =~ ^[0-9]+$ ]] || die "--limit must be a non-negative integer"
-if [[ -n "${ISSUE_NUMBER}" ]]; then
-  [[ -n "${REPO_FILTER}" ]] || die "--issue requires --repo"
-  [[ "${ISSUE_NUMBER}" =~ ^[0-9]+$ ]] || die "--issue must be an integer"
-  ISSUE_REFS+=("${REPO_FILTER}#${ISSUE_NUMBER}")
-fi
 
 require_command gh
 require_command jq
@@ -198,25 +193,41 @@ if [[ "${EXECUTE}" == "true" ]]; then
 fi
 load_github_token
 
-if [[ "${ALL_OPEN}" == "true" ]]; then
-  repos=("batocera.drone" "batocera.overmind")
-  if [[ -n "${REPO_FILTER}" ]]; then
-    repos=("${REPO_FILTER}")
-  fi
-  for repo in "${repos[@]}"; do
-    while IFS= read -r number; do
-      [[ -n "${number}" ]] && ISSUE_REFS+=("${repo}#${number}")
-    done < <(gh issue list --repo "${OWNER}/${repo}" --state open --limit "${LIMIT}" --json number --jq '.[].number')
-  done
-fi
+for repo in "${REPOS[@]}"; do
+  echo "Scanning ${OWNER}/${repo} for open assigned issues"
+  while IFS= read -r number; do
+    [[ -n "${number}" ]] && ISSUE_REFS+=("${repo}#${number}")
+  done < <(list_assigned_issue_numbers "${repo}")
+done
 
 if [[ ${#ISSUE_REFS[@]} -eq 0 ]]; then
-  usage
-  exit 2
+  echo "No open assigned issues found."
+  exit 0
 fi
 
 mkdir -p "${OUTPUT_ROOT}"
 for ref in "${ISSUE_REFS[@]}"; do
-  parsed="$(parse_issue_ref "${ref}")"
-  collect_issue "${parsed%%#*}" "${parsed##*#}"
+  collect_issue "${ref%%#*}" "${ref##*#}"
 done
+
+if [[ ${#PROMPT_FILES[@]} -eq 0 ]]; then
+  exit 0
+fi
+
+if [[ "${MULTI_PROMPT}" == "true" ]]; then
+  if [[ "${EXECUTE}" == "true" ]]; then
+    for prompt_file in "${PROMPT_FILES[@]}"; do
+      issue_dir="$(basename "$(dirname "${prompt_file}")")"
+      repo="$(basename "$(dirname "$(dirname "${prompt_file}")")")"
+      echo "Launching Claude for ${repo}/${issue_dir}"
+      launch_claude "${repo}-${issue_dir}" "${prompt_file}"
+    done
+  fi
+else
+  combined_prompt="$(build_combined_prompt)"
+  echo "Generated ${combined_prompt#${FEDERATION_ROOT}/}"
+  if [[ "${EXECUTE}" == "true" ]]; then
+    echo "Launching Claude with ${#PROMPT_FILES[@]} issue(s) in one prompt"
+    launch_claude "bff-assigned-issues" "${combined_prompt}"
+  fi
+fi

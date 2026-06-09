@@ -46,19 +46,16 @@ Docker must be running. If no ROM files are present, the swarm scripts fail and 
 
 ### TL;DR: turn GitHub issues into Claude Code implementation sessions
 
-From the federation root, generate a complete issue-context bundle and a
-Claude Code prompt for a Drone or Overmind issue:
+From the federation root, generate complete issue-context bundles and Claude
+Code prompts for every open assigned issue in the `.github`, `batocera.drone`,
+and `batocera.overmind` repositories:
 
 ```bash
-.github/scripts/triage-github-issues.sh drone#123
-.github/scripts/triage-github-issues.sh overmind#456
+.github/scripts/triage-github-issues.sh
 ```
 
-Issue URLs are accepted too. To fetch every open issue from both repositories:
-
-```bash
-.github/scripts/triage-github-issues.sh --all-open
-```
+Unassigned and closed issues are ignored. Labels are included in generated
+prompts when present, but labels are not required.
 
 Generated issue JSON, comments, timeline events, cross-references, and prompts
 are saved under:
@@ -67,11 +64,25 @@ are saved under:
 .github/scripts/issue-triage-output/<repo>/issue-<number>/
 ```
 
-Generation is the default so the prompt can be reviewed first. Add `--execute`
-to launch one interactive Claude Code session per selected issue:
+By default, the individual issue context files are retained and one combined
+prompt is generated at:
+
+```text
+.github/scripts/issue-triage-output/claude-prompt-all-issues.md
+```
+
+Add `--execute` to launch one interactive Claude Code session using that
+combined prompt:
 
 ```bash
-.github/scripts/triage-github-issues.sh --execute drone#123
+.github/scripts/triage-github-issues.sh --execute
+```
+
+Use `--multi-prompt` to skip the combined prompt. With `--execute`, this
+launches one Claude Code session per issue:
+
+```bash
+.github/scripts/triage-github-issues.sh --execute --multi-prompt
 ```
 
 Claude is launched from the federation root with:
@@ -80,10 +91,11 @@ Claude is launched from the federation root with:
 claude --add-dir .github --add-dir batocera.drone --add-dir batocera.overmind
 ```
 
-The generated prompt tells Claude to cross-reference all three repositories and
-their skills, implement and test the fix, and use live diagnostics only when
-they are relevant. Issue bodies and comments are explicitly treated as
-untrusted input.
+The generated prompt includes the issue assignees and triage labels, and tells
+Claude to use the labels as intent context, cross-reference all three
+repositories and their skills, implement and test the fix, and use live
+diagnostics only when they are relevant. Issue bodies and comments are
+explicitly treated as untrusted input.
 
 The triage script uses `GH_TOKEN` or `GITHUB_TOKEN` when already set. Otherwise,
 it reads the `github_token:` value from `.github/.credentials` without printing
