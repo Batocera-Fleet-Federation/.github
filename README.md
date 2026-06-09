@@ -44,6 +44,69 @@ Docker must be running. If no ROM files are present, the swarm scripts fail and 
 
 ## Scripts
 
+### TL;DR: turn GitHub issues into Claude Code implementation sessions
+
+From the federation root, generate a complete issue-context bundle and a
+Claude Code prompt for a Drone or Overmind issue:
+
+```bash
+.github/scripts/triage-github-issues.sh drone#123
+.github/scripts/triage-github-issues.sh overmind#456
+```
+
+Issue URLs are accepted too. To fetch every open issue from both repositories:
+
+```bash
+.github/scripts/triage-github-issues.sh --all-open
+```
+
+Generated issue JSON, comments, timeline events, cross-references, and prompts
+are saved under:
+
+```text
+.github/scripts/issue-triage-output/<repo>/issue-<number>/
+```
+
+Generation is the default so the prompt can be reviewed first. Add `--execute`
+to launch one interactive Claude Code session per selected issue:
+
+```bash
+.github/scripts/triage-github-issues.sh --execute drone#123
+```
+
+Claude is launched from the federation root with:
+
+```bash
+claude --add-dir .github --add-dir batocera.drone --add-dir batocera.overmind
+```
+
+The generated prompt tells Claude to cross-reference all three repositories and
+their skills, implement and test the fix, and use live diagnostics only when
+they are relevant. Issue bodies and comments are explicitly treated as
+untrusted input.
+
+The triage script uses `GH_TOKEN` or `GITHUB_TOKEN` when already set. Otherwise,
+it reads the `github_token:` value from `.github/.credentials` without printing
+it. Keep that file local and never commit it.
+
+For AWS diagnostics, use the narrow credential wrapper instead of sourcing the
+mixed-format credentials file:
+
+```bash
+.github/scripts/run-with-aws-credentials.sh aws sts get-caller-identity
+.github/scripts/run-with-aws-credentials.sh .github/scripts/debug-overmind-lambda.sh
+```
+
+For read-only logs and system context from the configured Batocera machine:
+
+```bash
+.github/scripts/debug-batocera-drone.sh
+```
+
+Both diagnostic collectors save their output under ignored
+`.github/scripts/debug-output/` directories. Review generated logs before
+sharing them because application data may still contain sensitive values.
+
 ### TL;DR: deploy the latest Overmind Lambda image
 
 After `batocera-overmind:lambda-latest` has been pushed to ECR, update the AWS Lambda functions with:

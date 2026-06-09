@@ -90,6 +90,7 @@ Icon?
 logs/
 *.log
 scripts/debug-output/
+scripts/issue-triage-output/
 
 # =============================================================================
 # Optional: Keep folder structure while ignoring contents
