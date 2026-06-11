@@ -79,7 +79,7 @@ locals {
     # Must run at or below NOTIFICATION_AGGREGATION_WINDOW_MINUTES (default 3) so
     # every queued notification gets multiple delivery chances before it ages out
     # of the aggregation window.
-    notification-delivery = "rate(1 minute)"
+    notification-delivery = "rate(3 minute)"
     device-status         = "rate(5 minutes)"
     public-reachability   = "rate(1 minute)"
   }
