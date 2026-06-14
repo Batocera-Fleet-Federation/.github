@@ -119,7 +119,7 @@ cat /userdata/system/drone-app/app/VERSION 2>/dev/null
 section drone-service-log
 tail -n ${LOG_TAIL} /userdata/system/logs/DRONE_SERVER.log 2>/dev/null
 section drone-app-logs
-find /userdata/system/drone-app -maxdepth 3 -type f -name '*.log' -print 2>/dev/null | while IFS= read -r log; do
+find /userdata/system/logs/drone-app /userdata/system/drone-app -maxdepth 3 -type f -name '*.log' -print 2>/dev/null | sort -u | while IFS= read -r log; do
   printf '\\n--- %s ---\\n' "\$log"
   tail -n ${LOG_TAIL} "\$log"
 done
