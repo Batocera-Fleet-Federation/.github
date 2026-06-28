@@ -81,6 +81,10 @@ locals {
     # of the aggregation window.
     notification-delivery = "rate(3 minutes)"
     device-status         = "rate(5 minutes)"
-    public-reachability   = "rate(1 minute)"
+    # Outbound-only by default: the public-reachability probe is OFF unless
+    # OVERMIND_PUBLIC_REACHABILITY_ENABLED=1, so this fires a cheap no-op. Kept on
+    # a slow cadence so re-enabling it (for port-forwarded fleets) still works
+    # without re-adding the schedule; lower it if you run direct-WAN drones.
+    public-reachability = "rate(15 minutes)"
   }
 }
