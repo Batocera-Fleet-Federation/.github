@@ -409,3 +409,40 @@ variable "elasticache_node_type" {
   type        = string
   default     = "cache.t3.micro"
 }
+
+# ── Edge service (always-on mux + relay) ─────────────────────────────────────
+variable "enable_edge" {
+  description = "Deploy the always-on Edge service (ECS Fargate + NLB) for the outbound drone mux + relay. No-op until true."
+  type        = bool
+  default     = false
+}
+
+variable "edge_subdomain" {
+  description = "Subdomain for the Edge endpoint (drones connect to <edge_subdomain>.<domain>)."
+  type        = string
+  default     = "edge"
+}
+
+variable "edge_image_tag" {
+  description = "Image tag for the Edge container in its ECR repo."
+  type        = string
+  default     = "edge-latest"
+}
+
+variable "edge_desired_count" {
+  description = "Number of Edge Fargate tasks."
+  type        = number
+  default     = 1
+}
+
+variable "edge_cpu" {
+  description = "Fargate CPU units for an Edge task."
+  type        = number
+  default     = 512
+}
+
+variable "edge_memory" {
+  description = "Fargate memory (MiB) for an Edge task."
+  type        = number
+  default     = 1024
+}
