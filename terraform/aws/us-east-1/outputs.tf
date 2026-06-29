@@ -3,6 +3,16 @@ output "ecr_repository_url" {
   value       = aws_ecr_repository.overmind.repository_url
 }
 
+output "edge_ecr_repository_url" {
+  description = "ECR repository URL for the Edge image (when enable_edge)."
+  value       = var.enable_edge ? aws_ecr_repository.edge[0].repository_url : null
+}
+
+output "edge_endpoint" {
+  description = "Edge endpoint drones connect to (set DRONE_EDGE_URL to this)."
+  value       = var.enable_edge ? "tls://${local.edge_fqdn}:443" : null
+}
+
 output "overmind_url" {
   description = "Public Overmind URL."
   value       = "https://${local.overmind_fqdn}"

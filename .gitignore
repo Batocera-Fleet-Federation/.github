@@ -121,3 +121,6 @@ data/roms/**
 # Certificates
 *.pem
 *.crt
+
+# draw.io CLI temp/lock files
+.$*.dtmp

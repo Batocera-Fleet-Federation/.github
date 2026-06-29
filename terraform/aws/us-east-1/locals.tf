@@ -81,6 +81,11 @@ locals {
     # of the aggregation window.
     notification-delivery = "rate(3 minutes)"
     device-status         = "rate(5 minutes)"
-    public-reachability   = "rate(1 minute)"
+    # The public-reachability probe defaults conditional on the Edge: OFF when the
+    # Edge is enabled (OVERMIND_EDGE_ENABLED, which Terraform sets from enable_edge
+    # on the Lambdas), ON without an Edge so cross-network drones keep a direct WAN
+    # path. The rule always fires; the job no-ops cheaply when disabled. Kept on a
+    # slow cadence; lower it if you run direct-WAN (port-forwarded) drones.
+    public-reachability = "rate(15 minutes)"
   }
 }

@@ -24,6 +24,12 @@ x-drone-env: &drone-env
   DRONE_ROM_MIN: 4
   DRONE_ROM_MAX: 10
   DRONE_SKIP_ROM_SEED: "true"
+  # Persistent outbound connection to the Edge. Enabled in the swarm so the
+  # outbound-only path is exercised; the Edge uses a self-signed cert here, so
+  # Drones connect with TLS verification disabled.
+  DRONE_EDGE_ENABLED: "${DRONE_EDGE_ENABLED:-true}"
+  DRONE_EDGE_URL: "${DRONE_EDGE_URL:-tls://bff-edge:9443}"
+  DRONE_EDGE_VERIFY_TLS: "${DRONE_EDGE_VERIFY_TLS:-false}"
 
 x-drone-common: &drone-common
   image: ghcr.io/batocera-fleet-federation/batocera-drone:local
@@ -87,6 +93,30 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+
+  edge:
+    image: ghcr.io/batocera-fleet-federation/batocera-edge:local
+    build:
+      context: ../../batocera.overmind
+      dockerfile: Dockerfile.edge
+    environment:
+      EDGE_HOST: 0.0.0.0
+      EDGE_PORT: 9443
+      # Drones validate against their stored drone_token_hash (real auth). Set
+      # EDGE_AUTH=allow-all for a quick presence check before Drones are claimed.
+      EDGE_AUTH: "${EDGE_AUTH:-db}"
+      EDGE_TLS_SELF_SIGNED: "1"
+      OVERMIND_DATABASE_URL: "${OVERMIND_DATABASE_URL:-postgresql://overmind:overmind@postgres:5432/overmind}"
+      OVERMIND_VERSION: "${OVERMIND_VERSION:-}"
+    ports:
+      - "${EDGE_PORT_HOST:-9443}:9443"
+    networks:
+      default:
+        aliases:
+          - bff-edge
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   drone-a:
     <<: *drone-common

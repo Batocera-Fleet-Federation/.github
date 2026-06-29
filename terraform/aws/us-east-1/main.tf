@@ -701,9 +701,10 @@ resource "aws_lambda_function" "api" {
       JWT_SIGNING_SECRET              = random_password.secret_key.result
       OVERMIND_VERSION                = var.overmind_version
       USE_FAKE_DATA                   = tostring(var.use_fake_data)
+      OVERMIND_EDGE_ENABLED           = tostring(var.enable_edge)
       }, var.enable_internal_ca_secret ? {
       OVERMIND_INTERNAL_CA_SECRET_NAME = aws_secretsmanager_secret.internal_ca[0].name
-    } : {}, var.enable_elasticache ? {
+      } : {}, var.enable_elasticache ? {
       OVERMIND_REDIS_URL = "redis://${aws_elasticache_cluster.overmind[0].cache_nodes[0].address}:6379"
     } : {})
   }
@@ -744,9 +745,10 @@ resource "aws_lambda_function" "scheduled" {
       JWT_SIGNING_SECRET              = random_password.secret_key.result
       OVERMIND_VERSION                = var.overmind_version
       USE_FAKE_DATA                   = tostring(var.use_fake_data)
+      OVERMIND_EDGE_ENABLED           = tostring(var.enable_edge)
       }, var.enable_internal_ca_secret ? {
       OVERMIND_INTERNAL_CA_SECRET_NAME = aws_secretsmanager_secret.internal_ca[0].name
-    } : {}, var.enable_elasticache ? {
+      } : {}, var.enable_elasticache ? {
       OVERMIND_REDIS_URL = "redis://${aws_elasticache_cluster.overmind[0].cache_nodes[0].address}:6379"
     } : {})
   }
