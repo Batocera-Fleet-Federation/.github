@@ -41,7 +41,10 @@ auto-included. The cross-repo relay test needs no swarm; the others do.
 
 Lambda + API Gateway (HTTP) + RDS + ElastiCache + Route53. Scheduled jobs +
 cadences in `locals.tf` (`notification-delivery`, `device-status`,
-`public-reachability` — the last relaxed/off by default for outbound-only).
+`public-reachability` — the last defaults conditional on the Edge: OFF when
+`OVERMIND_EDGE_ENABLED` (Terraform sets it from `enable_edge`), ON without an Edge
+so cross-network Drones keep a direct WAN path; the EventBridge rule still fires
+and the job no-ops when disabled).
 
 **Edge (`edge.tf`, gated on `var.enable_edge`, default false → no-op).** ECS
 Fargate service running `overmind.edge.edge_app` behind a Network Load Balancer:
