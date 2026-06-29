@@ -5,10 +5,10 @@ Edge mode. Each file has **two pages**: an **Architecture** view (who talks to
 whom, the planes, the data paths) and a **Transfer sequence** (numbered
 step-by-step flow).
 
-| File | Shows |
+| File (`enable_edge`) | Shows |
 |---|---|
-| [`enable_edge_false.drawio`](enable_edge_false.drawio) | **No Edge.** Outbound-only control plane; the selector has only `[LAN-direct → direct-public]`. Full P2P on the same LAN; cross-network only to a **port-forwarded** drone (the auto-on reachability probe). No relay, no hole-punch. |
-| [`enable_edge_true.drawio`](enable_edge_true.drawio) | **Edge deployed.** Every drone holds a persistent **outbound mux** to the Edge. Control plane only mints transfer tokens. Data moves Drone↔Drone over the best tier `LAN → direct-public → hole-punch → relay` (fall-through); the Edge **relays only as a last resort** and never carries bytes on the other tiers. No router config. |
+| [`edge-off-lan-direct-p2p.drawio`](edge-off-lan-direct-p2p.drawio) — **Edge OFF** | **No Edge.** Outbound-only control plane; the selector has only `[LAN-direct → direct-public]`. Full P2P on the same LAN; cross-network only to a **port-forwarded** drone (the auto-on reachability probe). No relay, no hole-punch. |
+| [`edge-on-holepunch-relay-p2p.drawio`](edge-on-holepunch-relay-p2p.drawio) — **Edge ON** | **Edge deployed.** Every drone holds a persistent **outbound mux** to the Edge. Control plane only mints transfer tokens. Data moves Drone↔Drone over the best tier `LAN → direct-public → hole-punch → relay` (fall-through); the Edge **relays only as a last resort** and never carries bytes on the other tiers. No router config. |
 
 ## Opening / editing
 
@@ -18,7 +18,10 @@ step-by-step flow).
   draw.io desktop app. The files are plain (uncompressed) mxGraph XML, so they
   diff and merge in git.
 - **Export** (PNG/SVG for docs): in draw.io, File → Export as → PNG/SVG, or
-  `drawio --export --format svg --page-index 0 enable_edge_true.drawio`.
+  `drawio --export --format svg --page-index 0 edge-on-holepunch-relay-p2p.drawio`.
+
+All cells use an explicit dark font on a white page background, so they stay
+readable in both light and dark draw.io themes.
 
 ## Colour key (both files)
 
