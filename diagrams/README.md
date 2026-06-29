@@ -10,6 +10,23 @@ step-by-step flow).
 | [`edge-off-lan-direct-p2p.drawio`](edge-off-lan-direct-p2p.drawio) — **Edge OFF** | **No Edge.** Outbound-only control plane; the selector has only `[LAN-direct → direct-public]`. Full P2P on the same LAN; cross-network only to a **port-forwarded** drone (the auto-on reachability probe). No relay, no hole-punch. |
 | [`edge-on-holepunch-relay-p2p.drawio`](edge-on-holepunch-relay-p2p.drawio) — **Edge ON** | **Edge deployed.** Every drone holds a persistent **outbound mux** to the Edge. Control plane only mints transfer tokens. Data moves Drone↔Drone over the best tier `LAN → direct-public → hole-punch → relay` (fall-through); the Edge **relays only as a last resort** and never carries bytes on the other tiers. No router config. |
 
+## Rendered SVGs (view without draw.io)
+
+Exported, ready-to-view copies of each page (dark text on a white background, so
+they read the same in light or dark viewers). They render in a browser, VS Code,
+and GitHub (a raster fallback is embedded for renderers that strip SVG
+`foreignObject`). The `.drawio` files above remain the editable source.
+
+- **Edge OFF** — [architecture](edge-off-lan-direct-p2p.architecture.svg) · [transfer sequence](edge-off-lan-direct-p2p.sequence.svg)
+- **Edge ON** — [architecture](edge-on-holepunch-relay-p2p.architecture.svg) · [transfer sequence](edge-on-holepunch-relay-p2p.sequence.svg)
+
+To regenerate after editing a `.drawio` (the `drawio` CLI ignores `--page-index`,
+so export per page from a single-page copy):
+
+```bash
+drawio --no-sandbox -x -f svg -o edge-on-holepunch-relay-p2p.architecture.svg <single-page-copy>.drawio
+```
+
 ## Opening / editing
 
 - **VS Code:** install the *Draw.io Integration* extension (`hediet.vscode-drawio`)

@@ -1,0 +1,127 @@
+<mxfile host="Electron" pages="2">
+  <diagram id="ee_false_arch" name="Architecture — Edge OFF (LAN / direct P2P)">
+    <mxGraphModel dx="934" dy="670" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1120" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="fontColor=#000000;text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=22;fontStyle=1;" value="Batocera Swarm — enable_edge = FALSE  (no Edge deployed)" vertex="1">
+          <mxGeometry height="34" width="1000" x="40" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" parent="1" style="fontColor=#000000;shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;fontSize=13;spacingLeft=8;spacingTop=6;size=18;" value="Drones use Overmind for coordination ONLY (outbound HTTPS). ROM/BIOS/save bytes move Drone↔Drone directly. The TransportSelector has just two tiers — [ LAN-direct → direct-public ]. The relay and hole-punch tiers need the Edge, so they are absent here. Result: full P2P on the SAME LAN; cross-network P2P only to a port-forwarded drone." vertex="1">
+          <mxGeometry height="60" width="1520" x="40" y="62" as="geometry" />
+        </mxCell>
+        <mxCell id="cp" parent="1" style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#eef3fb;strokeColor=#6c8ebf;verticalAlign=top;align=left;fontStyle=1;fontSize=13;spacingLeft=10;spacingTop=8;" value="CONTROL PLANE — Overmind (FastAPI · uvicorn/EC2 or AWS Lambda) — never carries ROM bytes" vertex="1">
+          <mxGeometry height="190" width="740" x="430" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="cp1" parent="1" style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" value="Auth · RBAC · Registration" vertex="1">
+          <mxGeometry height="48" width="200" x="450" y="192" as="geometry" />
+        </mxCell>
+        <mxCell id="cp2" parent="1" style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" value="CA · mTLS cert signing&#xa;(peer cert pinning)" vertex="1">
+          <mxGeometry height="48" width="200" x="670" y="192" as="geometry" />
+        </mxCell>
+        <mxCell id="cp3" parent="1" style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" value="Peer metadata&#xa;public_ip · local_ip · port" vertex="1">
+          <mxGeometry height="48" width="260" x="890" y="192" as="geometry" />
+        </mxCell>
+        <mxCell id="cp4" parent="1" style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;fontSize=12;" value="public-reachability probe — AUTO-ON when no Edge&#xa;(TCP-probes each drone&#39;s public IP:port; sets reachable_url)" vertex="1">
+          <mxGeometry height="56" width="480" x="560" y="262" as="geometry" />
+        </mxCell>
+        <mxCell id="natA" parent="1" style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#f5f5f5;strokeColor=#999999;verticalAlign=top;align=left;fontStyle=1;fontSize=13;spacingLeft=10;spacingTop=8;" value="HOME NETWORK A — behind NAT A · single public IP 203.0.113.10" vertex="1">
+          <mxGeometry height="340" width="600" x="60" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="dA" parent="1" style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=8;fontSize=12;" value="Drone A — RECEIVER&#xa;&#xa;TransportSelector.fetch:&#xa;  1) LAN-direct&#xa;  2) direct-public&#xa;(one active download · resume · hash verify)" vertex="1">
+          <mxGeometry height="200" width="240" x="100" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="dB" parent="1" style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=8;fontSize=12;" value="Drone B — SOURCE&#xa;&#xa;serves GET /peer/{roms,bios,saves}&#xa;mTLS · path-traversal-safe&#xa;(same LAN as A)" vertex="1">
+          <mxGeometry height="200" width="240" x="390" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="natB" parent="1" style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#f5f5f5;strokeColor=#999999;verticalAlign=top;align=left;fontStyle=1;fontSize=13;spacingLeft=10;spacingTop=8;" value="HOME NETWORK B — behind NAT B · public IP 198.51.100.20" vertex="1">
+          <mxGeometry height="340" width="600" x="940" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="dC" parent="1" style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=8;fontSize=12;" value="Drone C — SOURCE (different network)&#xa;&#xa;serves /peer/* (mTLS)&#xa;&#xa;Reachable from the WAN ONLY if the&#xa;router PORT-FORWARDS :443 → C." vertex="1">
+          <mxGeometry height="200" width="320" x="1080" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="e_a_cp" edge="1" parent="1" source="dA" style="fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6c8ebf;fontSize=11;endArrow=block;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" target="cp" value="outbound HTTPS&#xa;heartbeat · claim actions · peer list · CSR sign">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_c_cp" edge="1" parent="1" source="dC" style="fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6c8ebf;fontSize=11;endArrow=block;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" target="cp" value="outbound HTTPS&#xa;(coordination only)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_probe" edge="1" parent="1" source="cp4" style="fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#b85450;dashed=1;strokeWidth=2;fontSize=11;endArrow=block;" target="dC" value="reachability probe → TCP 198.51.100.20:443&#xa;succeeds ONLY if port-forwarded">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_lan" edge="1" parent="1" source="dA" style="fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82b366;strokeWidth=3;fontSize=11;endArrow=block;startArrow=block;" target="dB" value="LAN-direct  ✓&#xa;mTLS GET → B.local_ip /peer/*&#xa;same public_ip ⇒ same LAN">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_wan" edge="1" parent="1" source="dA" style="fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#b85450;dashed=1;strokeWidth=3;fontSize=11;endArrow=block;startArrow=block;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" target="dC" value="direct-public — mTLS → C&#39;s public IP&#xa;✓ ONLY if C port-forwarded&#xa;✗ otherwise — NO relay fallback (transfer fails)">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="legend" parent="1" style="fontColor=#000000;shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;fontSize=12;spacingLeft=8;spacingTop=6;size=16;" value="LEGEND&#xa;&#xa;── blue  = control-plane HTTPS (coordination; no ROM bytes)&#xa;── green (thick) = working P2P data path (mTLS /peer/*)&#xa;── red dashed = path that works ONLY with port-forwarding&#xa;yellow box = the auto-on reachability probe" vertex="1">
+          <mxGeometry height="170" width="560" x="60" y="850" as="geometry" />
+        </mxCell>
+        <mxCell id="decision" parent="1" style="fontColor=#000000;shape=note;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;fontSize=12;spacingLeft=8;spacingTop=6;size=16;" value="WHEN enable_edge = FALSE FITS&#xa;&#xa;• All drones on ONE LAN  →  full P2P, free, no Edge, no router config.&#xa;• Multi-site  →  only PORT-FORWARDED drones are reachable across the WAN&#xa;   (the legacy model). Non-forwarded remote drones cannot sync.&#xa;&#xa;For no-router-config cross-network sync, set enable_edge = true&#xa;(see edge-on-holepunch-relay-p2p.drawio)." vertex="1">
+          <mxGeometry height="170" width="600" x="700" y="850" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="ee_false_seq" name="Transfer sequence — Edge OFF (LAN / direct P2P)">
+    <mxGraphModel background="#ffffff" dx="1024" dy="720" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="s_title" value="Transfer sequence — Drone A wants ROM X  (enable_edge = false)" style="fontColor=#000000;text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="1100" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="s1" value="1.  Drone A registers + heartbeats to Overmind (outbound HTTPS). Overmind returns the swarm peer list, each peer with public_ip + local_ip + port. (No persistent connection — this is poll-based.)" style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;spacingLeft=10;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="80" y="80" width="1140" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="s2" value="2.  A needs ROM X. DownloadManager queues it (one active download) and calls TransportSelector.fetch(request). Tiers are tried best-first with fall-through: [ LAN-direct → direct-public ]." style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="80" y="170" width="1140" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="s3" value="3.  TIER 1 — LanDirectTransport.usable( peer )?   Is the peer&#39;s public_ip == A&#39;s own public_ip (from _build_local_ip_addresses — a local probe, NOT the Edge)?" style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="80" y="260" width="1140" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="s3b" value="3a.  PEER B — same public_ip (same NAT) ⇒ LAN-direct USABLE.&#xa;→ GET https://B.local_ip/peer/roms/…  (mTLS, cert-pinned)&#xa;→ stream chunks · resume on Range · verify fingerprint/MD5.&#xa;✓  DONE — bytes never touched Overmind." style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="80" y="360" width="560" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="s3c" value="3b.  PEER C — different public_ip ⇒ LAN-direct NOT usable.&#xa;→ fall through to Tier 2." style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="680" y="360" width="540" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="s4" value="4.  TIER 2 — DirectPublicTransport.fetch (peer C):&#xa;→ GET https://198.51.100.20:443/peer/roms/…  (mTLS to C&#39;s public IP / reachable_url from the probe)." style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="680" y="540" width="540" height="86" as="geometry" />
+        </mxCell>
+        <mxCell id="s5ok" value="4a.  C IS port-forwarded (probe set reachable_url)&#xa;→ stream + verify.  ✓  DONE (direct WAN)." style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="680" y="660" width="540" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="s5no" value="4b.  C is NOT port-forwarded&#xa;→ connection refused / timeout. No more tiers (relay + hole-punch need the Edge).&#xa;✗  TRANSFER FAILS for this cross-network peer." style="fontColor=#000000;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="680" y="770" width="540" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="se1" style="fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#666666;" edge="1" parent="1" source="s1" target="s2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="se2" style="fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#666666;" edge="1" parent="1" source="s2" target="s3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="se3b" value="same LAN" style="fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#82b366;strokeWidth=2;" edge="1" parent="1" source="s3" target="s3b">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="se3c" value="different network" style="fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#d79b00;strokeWidth=2;" edge="1" parent="1" source="s3" target="s3c">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="se4" style="fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#d79b00;" edge="1" parent="1" source="s3c" target="s4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="se5ok" style="fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#82b366;" edge="1" parent="1" source="s4" target="s5ok">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="se5no" style="fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#b85450;" edge="1" parent="1" source="s5ok" target="s5no">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
