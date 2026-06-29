@@ -1,9 +1,46 @@
-# CLAUDE.md — Federation infra (`.github`)
+# CLAUDE.md — Federation hub + infra (`.github`)
 
-Guidance for Claude Code when working in **this repo** (shared infra for the
-Batocera Fleet Federation). Siblings: `batocera.overmind/` (hub + Edge),
-`batocera.drone/` (device agent). This repo holds the local multi-container swarm,
-integration tests, AWS Terraform, diagnostics, and issue-triage tooling.
+This is the **shared/federation repo**; it also serves as the workspace-level
+overview (the federation root is not itself a git repo, so this file is the
+checked-in home for cross-repo guidance — the root `CLAUDE.md` is a symlink to it).
+This repo holds the local multi-container swarm, integration tests, AWS Terraform,
+diagnostics, and issue-triage tooling.
+
+## Federation overview
+
+A **federation workspace** of three independently-versioned git repos:
+
+- **`batocera.overmind/`** — central hub: FastAPI + Postgres (uvicorn/EC2 or AWS
+  Lambda) **and** the always-on **Edge** (`src/overmind/edge/`). Control plane +
+  relay/mux server.
+- **`batocera.drone/`** — the device agent on each Batocera machine: stdlib
+  `http.server` web app + SQLite cache + the outbound-only `app/transport/` stack.
+- **`.github/`** — this repo: shared infra (swarm, integration tests, Terraform,
+  diagnostics).
+
+**Each repo has its own committed `CLAUDE.md`** (architecture, commands,
+conventions) and auto-surfaced skills under `*/.claude/skills/` — read the matching
+one before non-trivial work: Overmind (`overmind-db-management`,
+`overmind-edge-networking`), Drone (`drone-db-management`,
+`drone-p2p-transfer-security`, `drone-edge-networking`), shared
+(`bff-ui-theme-functionality`). A change often **spans two repos** (e.g. a new
+drone-reported field needs drone scan/upload + overmind ingest/UI; a networking
+change spans `app/transport/` and `src/overmind/edge/`) — cross-reference both.
+
+**Networking (outbound-only), in one paragraph.** Drones make **outbound
+connections only** — no port-forward, public IP, or inbound HTTPS. Each Drone holds
+one persistent mux to the **Edge**; asset bytes move Drone↔Drone over the best tier
+(`LAN-direct → direct-public → UDP hole-punch → Edge relay`, fall-through on
+failure), and the Edge **relays only as a last resort** (never sees plaintext on
+other tiers, never carries bytes through the control plane). It is **single-source
+P2P** (one best peer per transfer), **not** torrent-style swarming. **When is the
+Edge needed?** Same-LAN P2P works **without** it (same-public-IP detection);
+cross-network P2P needs the Edge **or** the legacy port-forward + reachability probe
+(which auto-defaults on when there's no Edge, so toggling the Edge can't strand
+cross-network drones). The Edge is opt-in (`enable_edge`, default off) and **not
+free-tier** (~$35–40/mo Fargate+NLB; self-host `bff-edge` to avoid that). Depth:
+the `drone-edge-networking` + `overmind-edge-networking` skills, and the **AWS
+Terraform** section below for deploy + cost.
 
 ## Local swarm & integration tests (run from the federation root)
 
