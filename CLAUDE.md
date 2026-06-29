@@ -58,6 +58,34 @@ CloudWatch logs; task/exec IAM. Outputs `edge_endpoint` (set the Drones'
 ECR repo (CI), and add a STUN/UDP NLB listener to enable prod hole-punch
 (`EDGE_STUN_PORT=0` today, so prod falls back to relay).
 
+**Deploy sequence (the ECS service references an image in an ECR repo Terraform
+itself creates, so order matters — there is no edge-image CI yet, push is manual):**
+```bash
+# 1. app code (new endpoints + migrations 0015/0016) — normal Lambda deploy
+.github/scripts/run-with-aws-credentials.sh .github/scripts/update-overmind-lambdas.sh
+# 2. set enable_edge=true in tfvars, then create the ECR repo first
+terraform apply -target=aws_ecr_repository.edge
+# 3. build + push the edge image (context = batocera.overmind/, repo batocera-edge:edge-latest)
+ECR=<acct>.dkr.ecr.us-east-1.amazonaws.com
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR
+docker build -f batocera.overmind/Dockerfile.edge -t $ECR/batocera-edge:edge-latest batocera.overmind
+docker push $ECR/batocera-edge:edge-latest
+# 4. full apply (ECS/NLB/ACM DNS-validated/Route53 — a few min), then point drones
+terraform apply && terraform output edge_endpoint   # -> tls://edge.<domain>:443
+# 5. set DRONE_EDGE_ENABLED=1 + DRONE_EDGE_URL=<edge_endpoint> on drones; roll out
+```
+Setting `OVERMIND_EDGE_ENABLED` (auto from `enable_edge`) flips the
+`public-reachability` default OFF, so the inbound probe stops once the Edge is up.
+
+**Cost / when the Edge is needed.** The Edge is **not free-tier**: the Fargate task
+(~$18/mo at the default 0.5 vCPU/1 GB) + NLB (~$16–21/mo) run 24/7 (≈$35–40/mo +
+relay egress). It is **only needed for cross-network P2P** (drones in different
+houses/NATs) — same-LAN transfers work P2P with the Edge off (LAN-direct uses
+same-public-IP detection, no Edge). Cheaper paths: self-host the `bff-edge`
+container on existing/cheap compute (skips the NLB+Fargate bill), or shrink
+`edge_cpu/edge_memory`. With the Edge off, cross-network falls back to the legacy
+direct-WAN path (needs port-forwarding + the auto-on reachability probe).
+
 ## Live diagnostics (read-only; never print/commit credentials)
 
 ```bash
